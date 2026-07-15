@@ -244,9 +244,6 @@ def call_claude(prompt: str, system_prompt: Optional[str] = None) -> str:
     payload = {
         "model": "claude-sonnet-5",
         "max_tokens": 8000,
-        "thinking": {
-            "type": "disabled"
-        },
         "messages": [
             {
                 "role": "user",
@@ -455,6 +452,13 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
         ocr_errors: List[str] = []
 
         # Step 1: OCR Page-by-Page
+        fitz_doc = None
+        if PYMUPDF_AVAILABLE:
+            try:
+                fitz_doc = fitz.open(stream=file_bytes, filetype="pdf")
+            except Exception as e:
+                print(f"Failed to open PDF with PyMuPDF: {e}")
+
         for p_idx in range(total_pages):
             page_num = p_idx + 1
             print(f"Processing page {page_num}/{total_pages}...")
@@ -463,11 +467,9 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
             converted_via_image = False
             
             # Try to convert page to JPEG image using PyMuPDF (no external dependencies) or pdf2image (requires Poppler)
-            if PYMUPDF_AVAILABLE:
+            if PYMUPDF_AVAILABLE and fitz_doc:
                 try:
-                    # Open PDF from bytes
-                    doc = fitz.open(stream=file_bytes, filetype="pdf")
-                    page = doc.load_page(p_idx)
+                    page = fitz_doc.load_page(p_idx)
                     
                     # Target scaling to ~1200px width at 150 DPI
                     rect = page.rect
@@ -561,6 +563,16 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
             update_pdf_upload(upload_id, {
                 "progress_log": f"Page {page_num} of {total_pages} completed - {method_desc}."
             })
+
+        if fitz_doc:
+            try:
+                fitz_doc.close()
+            except Exception as e:
+                print(f"Failed to close PyMuPDF doc: {e}")
+
+        # Force garbage collection to free page image buffers before starting LLM analysis
+        import gc
+        gc.collect()
 
         real_ocr_text = get_real_ocr_text(extracted_texts)
         if len(real_ocr_text) < MIN_EXTRACTED_TEXT_CHARS:
