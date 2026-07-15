@@ -14,7 +14,13 @@ from PIL import Image
 from backend.config import settings, get_all_gemini_keys, get_next_gemini_key
 from backend.database import update_pdf_upload, create_news_item, get_domain_mappings, get_officers
 
-# Try importing pdf2image for OCR conversion. We will fall back to pypdf if poppler is missing.
+# Try importing PyMuPDF (fitz) or pdf2image for OCR page-to-image conversion.
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+
 try:
     import pdf2image
     PDF2IMAGE_AVAILABLE = True
@@ -456,8 +462,44 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
             page_text = ""
             converted_via_image = False
             
-            # Try to convert page to JPEG image using pdf2image if available and poppler is installed
-            if PDF2IMAGE_AVAILABLE:
+            # Try to convert page to JPEG image using PyMuPDF (no external dependencies) or pdf2image (requires Poppler)
+            if PYMUPDF_AVAILABLE:
+                try:
+                    # Open PDF from bytes
+                    doc = fitz.open(stream=file_bytes, filetype="pdf")
+                    page = doc.load_page(p_idx)
+                    
+                    # Target scaling to ~1200px width at 150 DPI
+                    rect = page.rect
+                    width = rect.width
+                    if width > 0:
+                        scale = 150.0 / 72.0
+                        if width * scale > 1200:
+                            scale = 1200.0 / width
+                        mat = fitz.Matrix(scale, scale)
+                        pix = page.get_pixmap(matrix=mat)
+                    else:
+                        pix = page.get_pixmap(dpi=150)
+                    
+                    img_bytes = pix.tobytes("jpeg")
+                    
+                    # Call Mistral OCR API
+                    if settings.MISTRAL_API_KEY:
+                        page_text = call_mistral_ocr(img_bytes, f"page_{page_num}.jpg")
+                        converted_via_image = True
+                    else:
+                        page_text = ""  # Trigger fallback
+                except Exception as img_err:
+                    error_text = f"Page {page_num} (PyMuPDF): {img_err}"
+                    ocr_errors.append(error_text)
+                    print(f"PyMuPDF/Mistral OCR failed for page {page_num}: {img_err}")
+                    update_pdf_upload(upload_id, {
+                        "progress_log": f"OCR image/Mistral step failed on page {page_num} (PyMuPDF): {str(img_err)[:220]}"
+                    })
+                    page_text = ""
+
+            # Try to convert page to JPEG image using pdf2image if PyMuPDF not available or failed
+            if not page_text and PDF2IMAGE_AVAILABLE:
                 try:
                     # Convert only the current page to conserve memory
                     images = pdf2image.convert_from_bytes(
@@ -487,11 +529,11 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                         else:
                             page_text = "" # Trigger pypdf text extraction fallback
                 except Exception as img_err:
-                    error_text = f"Page {page_num}: {img_err}"
+                    error_text = f"Page {page_num} (pdf2image): {img_err}"
                     ocr_errors.append(error_text)
                     print(f"pdf2image/Mistral OCR failed for page {page_num}: {img_err}")
                     update_pdf_upload(upload_id, {
-                        "progress_log": f"OCR image/Mistral step failed on page {page_num}: {str(img_err)[:220]}"
+                        "progress_log": f"OCR image/Mistral step failed on page {page_num} (pdf2image): {str(img_err)[:220]}"
                     })
                     page_text = ""
             
@@ -522,12 +564,12 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
 
         real_ocr_text = get_real_ocr_text(extracted_texts)
         if len(real_ocr_text) < MIN_EXTRACTED_TEXT_CHARS:
-            if not PDF2IMAGE_AVAILABLE:
-                poppler_hint = "The pdf2image Python package is not installed."
-            elif not POPPLER_PATH:
+            if not PYMUPDF_AVAILABLE and not PDF2IMAGE_AVAILABLE:
+                poppler_hint = "Neither PyMuPDF nor pdf2image Python packages are installed."
+            elif not PYMUPDF_AVAILABLE and not POPPLER_PATH:
                 poppler_hint = (
-                    "Poppler was not found. Install Poppler, set POPPLER_PATH, "
-                    "or keep the local tools/poppler folder in place."
+                    "PyMuPDF is not installed, and Poppler was not found. Install PyMuPDF (recommended), "
+                    "or install Poppler and set POPPLER_PATH."
                 )
             elif not settings.MISTRAL_API_KEY:
                 poppler_hint = "MISTRAL_API_KEY is not configured, so scanned PDF OCR cannot run."
