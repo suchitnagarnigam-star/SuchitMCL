@@ -290,6 +290,31 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
     officer_map = {o["id"]: o for o in all_officers}
     mapping_map = {m["department"]: m["suggested_officer_id"] for m in all_mappings}
 
+    # Bulk fetch evidence to prevent N+1 query problem
+    evidence_by_item = {}
+    if news_items_list:
+        if supabase:
+            try:
+                item_ids = [item["id"] for item in news_items_list]
+                evidence_list = []
+                chunk_size = 200
+                for i in range(0, len(item_ids), chunk_size):
+                    chunk = item_ids[i:i+chunk_size]
+                    res_ev = supabase.table("mcl_evidence").select("*").in_("news_item_id", chunk).execute()
+                    if res_ev.data:
+                        evidence_list.extend(res_ev.data)
+                for ev in evidence_list:
+                    nid = ev["news_item_id"]
+                    if nid not in evidence_by_item:
+                        evidence_by_item[nid] = []
+                    evidence_by_item[nid].append(ev)
+            except Exception as e:
+                print(f"DB Error fetching bulk evidence: {e}")
+        else:
+            for item in news_items_list:
+                nid = item["id"]
+                evidence_by_item[nid] = mock_db["evidence"].get(nid, [])
+
     joined_list = []
     for item in news_items_list:
         joined_item = dict(item)
@@ -304,8 +329,8 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
         suggested_officer = officer_map.get(suggested_officer_id) if suggested_officer_id else None
         joined_item["suggested_officer"] = suggested_officer
         
-        # Attach evidence if any exists
-        joined_item["evidence"] = get_evidence_for_item(item["id"])
+        # Attach bulk fetched evidence
+        joined_item["evidence"] = evidence_by_item.get(item["id"], [])
         
         joined_list.append(joined_item)
 
@@ -580,6 +605,10 @@ def get_officers_with_active_items() -> List[Dict[str, Any]]:
 
     active_item_ids = {item["id"] for item in news_items_list if item["status"] in ["dispatched", "in_progress"]}
     
+    # Fetch full news item details once outside the loop to avoid N+1 queries
+    all_items = get_news_items(status=None, date_str=None)
+    items_by_id = {x["id"]: x for x in all_items}
+
     # Gather officer item counts
     officer_active_counts: Dict[str, List[Dict[str, Any]]] = {}
     for d in all_dispatches:
@@ -587,9 +616,7 @@ def get_officers_with_active_items() -> List[Dict[str, Any]]:
         if n_id in active_item_ids:
             off_id = d["officer_id"]
             
-            # Fetch full news item details with pre-assigned Suggested Officer joined
-            all_items = get_news_items(status=None, date_str=None)
-            full_item = next((x for x in all_items if x["id"] == n_id), None)
+            full_item = items_by_id.get(n_id)
             if not full_item:
                 continue
 
@@ -646,6 +673,31 @@ def get_resolved_items(department: Optional[str] = None, officer_id: Optional[st
     all_officers = get_officers()
     officers_map = {o["id"]: o for o in all_officers}
 
+    # Bulk fetch evidence to prevent N+1 query problem
+    evidence_by_item = {}
+    if news_items_list:
+        if supabase:
+            try:
+                item_ids = [item["id"] for item in news_items_list]
+                evidence_list = []
+                chunk_size = 200
+                for i in range(0, len(item_ids), chunk_size):
+                    chunk = item_ids[i:i+chunk_size]
+                    res_ev = supabase.table("mcl_evidence").select("*").in_("news_item_id", chunk).execute()
+                    if res_ev.data:
+                        evidence_list.extend(res_ev.data)
+                for ev in evidence_list:
+                    nid = ev["news_item_id"]
+                    if nid not in evidence_by_item:
+                        evidence_by_item[nid] = []
+                    evidence_by_item[nid].append(ev)
+            except Exception as e:
+                print(f"DB Error fetching bulk evidence for resolved: {e}")
+        else:
+            for item in news_items_list:
+                nid = item["id"]
+                evidence_by_item[nid] = mock_db["evidence"].get(nid, [])
+
     joined_list = []
     for item in news_items_list:
         # Search filter match
@@ -670,7 +722,7 @@ def get_resolved_items(department: Optional[str] = None, officer_id: Optional[st
         joined["officer"] = officer
         joined["dispatch_details"] = d_record
         joined["all_dispatches"] = d_records
-        joined["evidence"] = get_evidence_for_item(item["id"])
+        joined["evidence"] = evidence_by_item.get(item["id"], [])
         joined_list.append(joined)
 
     # Sort reverse chronological by resolved_at
