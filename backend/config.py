@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     GOOGLE_SHEET_WEBHOOK_URL: str = ""
     GOOGLE_SHEET_ID: str = ""
+    GOOGLE_SHEET_TAB_NAME: str = "Sheet1"
 
     class Config:
         env_file = ".env"

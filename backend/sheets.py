@@ -40,7 +40,8 @@ def sync_to_google_sheet(news_item: dict, dispatches: list, officers_map: dict, 
         "assignees": assignees,
         "headline": headline,
         "summary": summary_text,
-        "remarks": remarks or ""
+        "remarks": remarks or "",
+        "tab_name": settings.GOOGLE_SHEET_TAB_NAME
     }
 
     # METHOD A: Google Apps Script Webhook URL (Easiest)
@@ -89,7 +90,7 @@ def sync_to_google_sheet(news_item: dict, dispatches: list, officers_map: dict, 
             # Append to sheet
             result = service.spreadsheets().values().append(
                 spreadsheetId=sheet_id,
-                range="Sheet1!A:I",
+                range=f"{settings.GOOGLE_SHEET_TAB_NAME}!A:I",
                 valueInputOption="RAW",
                 insertDataOption="INSERT_ROWS",
                 body=body
@@ -116,7 +117,8 @@ def sync_resolution_to_google_sheet(news_item_id: str, action_taken_description:
         "action": "update",
         "news_item_id": news_item_id,
         "action_taken": action_taken_description,
-        "evidence_urls": evidence_urls
+        "evidence_urls": evidence_urls,
+        "tab_name": settings.GOOGLE_SHEET_TAB_NAME
     }
     
     # METHOD A: Webhook
@@ -147,7 +149,7 @@ def sync_resolution_to_google_sheet(news_item_id: str, action_taken_description:
             # Read Column I (News Item ID) to find the row index
             res = service.spreadsheets().values().get(
                 spreadsheetId=sheet_id,
-                range="Sheet1!I:I"
+                range=f"{settings.GOOGLE_SHEET_TAB_NAME}!I:I"
             ).execute()
             
             rows = res.get("values", [])
@@ -164,7 +166,7 @@ def sync_resolution_to_google_sheet(news_item_id: str, action_taken_description:
                 }
                 result = service.spreadsheets().values().update(
                     spreadsheetId=sheet_id,
-                    range=f"Sheet1!G{found_idx}:H{found_idx}",
+                    range=f"{settings.GOOGLE_SHEET_TAB_NAME}!G{found_idx}:H{found_idx}",
                     valueInputOption="RAW",
                     body=update_body
                 ).execute()
