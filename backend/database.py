@@ -65,13 +65,16 @@ def seed_mock_db():
 seed_mock_db()
 
 # --- PDF UPLOADS ---
-def create_pdf_upload(filename: str, uploaded_by: str, storage_path: str) -> str:
+def create_pdf_upload(filename: str, uploaded_by: str, storage_path: str, upload_date: Optional[str] = None) -> str:
+    if not upload_date:
+        upload_date = date.today().isoformat()
     if supabase:
         try:
             data = {
                 "filename": filename,
                 "uploaded_by": uploaded_by,
                 "storage_path": storage_path,
+                "upload_date": upload_date,
                 "processing_status": "uploading",
                 "current_step": "uploading",
                 "progress_log": ["PDF file uploaded successfully."]
@@ -90,6 +93,7 @@ def create_pdf_upload(filename: str, uploaded_by: str, storage_path: str) -> str
         "filename": filename,
         "uploaded_by": uploaded_by,
         "storage_path": storage_path,
+        "upload_date": upload_date,
         "processing_status": "uploading",
         "current_step": "uploading",
         "progress_log": ["PDF file uploaded successfully."],
@@ -251,7 +255,7 @@ def create_news_item(news_item: Dict[str, Any]) -> Dict[str, Any]:
     uid = str(uuid.uuid4())
     news_item["id"] = uid
     news_item["status"] = news_item.get("status", "pending")
-    news_item["created_at"] = datetime.now().isoformat()
+    news_item["created_at"] = news_item.get("created_at") or datetime.now().isoformat()
     mock_db["news_items"][uid] = news_item
     return news_item
 

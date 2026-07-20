@@ -429,12 +429,32 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
     2. Document text segmentation and classification using Gemini.
     3. Suggested officer mapping and database commits.
     """
+    from datetime import date, datetime
     try:
         print(f"Starting background processing for upload_id: {upload_id}")
+        
+        # Resolve publication/ingestion date
+        from backend.database import get_pdf_upload
+        upload_record = get_pdf_upload(upload_id)
+        upload_date_str = None
+        if upload_record:
+            db_date = upload_record.get("upload_date")
+            if db_date:
+                if isinstance(db_date, (datetime, date)):
+                    upload_date_str = db_date.isoformat()
+                else:
+                    upload_date_str = str(db_date)
+                    if "T" in upload_date_str:
+                        upload_date_str = upload_date_str.split("T")[0]
+                    elif " " in upload_date_str:
+                        upload_date_str = upload_date_str.split(" ")[0]
+        if not upload_date_str:
+            upload_date_str = date.today().isoformat()
+
         update_pdf_upload(upload_id, {
             "processing_status": "ocr_processing",
             "current_step": "ocr_processing",
-            "progress_log": "Reading PDF metadata..."
+            "progress_log": f"Reading PDF metadata (Target date: {upload_date_str})..."
         })
 
         # Read PDF using PyPDF
@@ -798,6 +818,11 @@ JSON output (must conform to schema with page_number set strictly to {p_num}):""
             summary = item.get("summary", "")
             page_num = item.get("page_number", 1)
 
+            # Determine correct created_at timestamp based on upload_date
+            # Add current time part to make sorting sequential and avoid same-timestamp conflicts
+            time_part = datetime.now().strftime("%H:%M:%S")
+            item_created_at = f"{upload_date_str}T{time_part}"
+
             # Insert
             create_news_item({
                 "pdf_upload_id": upload_id,
@@ -808,7 +833,8 @@ JSON output (must conform to schema with page_number set strictly to {p_num}):""
                 "severity": severity,
                 "summary": summary,
                 "page_number": page_num,
-                "status": "pending"
+                "status": "pending",
+                "created_at": item_created_at
             })
             
             # Lookup officer details for log

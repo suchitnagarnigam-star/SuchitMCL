@@ -121,7 +121,11 @@ Municipal Corporation Ludhiana"""
 # --- ENDPOINTS ---
 
 @app.post("/upload-pdf")
-async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def upload_pdf(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    publish_date: Optional[str] = Query(None)
+):
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
@@ -131,7 +135,8 @@ async def upload_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(
         upload_id = db.create_pdf_upload(
             filename=file.filename,
             uploaded_by="PR Officer",
-            storage_path=storage_path
+            storage_path=storage_path,
+            upload_date=publish_date
         )
         background_tasks.add_task(process_pdf_background, upload_id, contents)
         return {"upload_id": upload_id, "status": "uploading"}

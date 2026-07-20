@@ -11,7 +11,7 @@ interface UploadTabProps {
   itemsExtracted: number;
   progressLog: string[];
   errorMessage: string;
-  triggerUpload: (file: File) => void;
+  triggerUpload: (file: File, customDate?: string) => void;
   handleReset: () => void;
 }
 
@@ -29,6 +29,13 @@ export default function UploadTab({
   handleReset
 }: UploadTabProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    // Offset local timezone date representation
+    const offset = today.getTimezoneOffset();
+    const localToday = new Date(today.getTime() - (offset * 60 * 1000));
+    return localToday.toISOString().split("T")[0];
+  });
   const logTerminalEndRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-scroll logs to bottom
@@ -55,7 +62,7 @@ export default function UploadTab({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       if (droppedFile.type === "application/pdf" || droppedFile.name.toLowerCase().endsWith(".pdf")) {
-        triggerUpload(droppedFile);
+        triggerUpload(droppedFile, selectedDate);
       } else {
         alert("Please drop a PDF document only.");
       }
@@ -65,13 +72,30 @@ export default function UploadTab({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      triggerUpload(selectedFile);
+      triggerUpload(selectedFile, selectedDate);
     }
   };
 
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+
+      {status === "idle" && (
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold text-[#0A2540] uppercase tracking-wider">News Publication Date</h4>
+              <p className="text-[11px] text-slate-500 font-medium">Select the date corresponding to the newspaper cuttings being uploaded</p>
+            </div>
+            <input 
+              type="date" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-slate-55 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg focus:ring-amber-500 focus:border-amber-500 p-2.5 shadow-sm w-full sm:w-44 cursor-pointer outline-none transition-all"
+            />
+          </div>
+        </div>
+      )}
 
       {/* Drag & Drop Area / Stepper Progress Display */}
       {status === "idle" ? (

@@ -80,7 +80,7 @@ export default function Home() {
     }, 3000);
   };
 
-  const triggerUpload = async (pdfFile: File) => {
+  const triggerUpload = async (pdfFile: File, customDate?: string) => {
     setUploadFile(pdfFile);
     setUploadStatus("uploading");
     setUploadErrorMessage("");
@@ -91,7 +91,11 @@ export default function Home() {
 
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiUrl}/upload-pdf`, {
+      const url = customDate 
+        ? `${apiUrl}/upload-pdf?publish_date=${customDate}`
+        : `${apiUrl}/upload-pdf`;
+        
+      const response = await fetch(url, {
         method: "POST",
         body: formData
       });
