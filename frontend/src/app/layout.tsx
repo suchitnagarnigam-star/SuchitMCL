@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ — Suchit Nagar Nigam MCL",
+  title: "ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ — Suchit Nagar Nigam MCL",
   description: "Municipal Corporation Ludhiana (MCL) Media Intelligence and Dispatch System",
 };
 

@@ -1,4 +1,4 @@
--- Supabase Migration SQL Update for Suchit Nagar Nigam (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)
+-- Supabase Migration SQL Update for Suchit Nagar Nigam (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)
 -- Alters news items to support full administrative lifecycle & resolution evidence tracking
 
 -- Update mcl_news_items status check constraint

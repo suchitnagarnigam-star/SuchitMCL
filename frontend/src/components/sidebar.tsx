@@ -28,7 +28,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           </div>
           <div>
             <h1 className="text-base font-bold text-slate-100 tracking-tight leading-tight">
-              ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ
+              ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ
             </h1>
             <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mt-0.5">
               Media Intelligence

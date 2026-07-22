@@ -11,7 +11,7 @@ import backend.database as db
 from backend.pipeline import process_pdf_background
 
 app = FastAPI(
-    title="Suchit Nagar Nigam API (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)",
+    title="Suchit Nagar Nigam API (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)",
     description="Media Intelligence and Dispatch System Backend for Municipal Corporation Ludhiana (MCL)"
 )
 
@@ -92,7 +92,7 @@ def generate_whatsapp_message(news_item: Dict[str, Any], officer: Dict[str, Any]
     if remarks and remarks.strip():
         remarks_block = f"📋 *Commissioner's Remarks:*\n{remarks.strip()}\n\n"
 
-    template = f"""🏛️ *Suchit Nagar Nigam — ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ*
+    template = f"""🏛️ *Suchit Nagar Nigam — ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ*
 *MCL Media Intelligence Brief*
 
 {short_code} — {full_name}
@@ -111,6 +111,8 @@ Office of the Corporation Commissioner, Ludhiana:
 
 {remarks_block}Please take necessary action and update status
 on the MCL dashboard at your earliest.
+
+Please visit https://suchit-mcl.vercel.app to upload ATRs.
 
 — Office of the Corporation Commissioner
 Municipal Corporation Ludhiana"""

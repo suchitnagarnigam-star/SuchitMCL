@@ -1,4 +1,4 @@
--- Supabase Seed SQL for Suchit Nagar Nigam (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)
+-- Supabase Seed SQL for Suchit Nagar Nigam (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)
 
 -- Seed Officers
 INSERT INTO mcl_officers (short_code, full_name, designation, officer_type, zone, department, whatsapp_number, is_active)

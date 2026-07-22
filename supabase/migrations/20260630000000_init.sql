@@ -1,4 +1,4 @@
--- Supabase Migration SQL for Suchit Nagar Nigam (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)
+-- Supabase Migration SQL for Suchit Nagar Nigam (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)
 -- Target Database: PostgreSQL
 
 -- Table 1: mcl_pdf_uploads

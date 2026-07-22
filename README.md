@@ -1,4 +1,4 @@
-# 🏛️ Suchit Nagar Nigam (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)
+# 🏛️ Suchit Nagar Nigam (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)
 
 Media Intelligence and Dispatch System built for the **Municipal Corporation Ludhiana (MCL), Punjab**. 
 

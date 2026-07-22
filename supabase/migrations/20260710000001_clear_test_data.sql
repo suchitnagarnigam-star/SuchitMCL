@@ -1,4 +1,4 @@
--- Supabase Migration SQL Update for Suchit Nagar Nigam (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)
+-- Supabase Migration SQL Update for Suchit Nagar Nigam (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)
 -- Truncates/wipes all dynamic testing tables (uploads, news items, dispatches, evidence)
 -- leaving baseline officers and domain mappings intact.
 

@@ -98,7 +98,7 @@ export default function GovTopHeader() {
               COMMISSIONER'S CONTROL DESK
             </span>
             <h1 className="text-xl md:text-2xl font-black text-[#0A2540] tracking-tight leading-none">
-              ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ
+              ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ
             </h1>
             <h2 className="text-xs md:text-sm font-bold text-slate-700 tracking-tight leading-none mt-1">
               Suchit Nagar Nigam — Municipal Corporation Ludhiana

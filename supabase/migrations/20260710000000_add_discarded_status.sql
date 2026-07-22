@@ -1,4 +1,4 @@
--- Supabase Migration SQL Update for Suchit Nagar Nigam (ਸੁਚਿਤ ਨਗਰ ਨਿਗਮ)
+-- Supabase Migration SQL Update for Suchit Nagar Nigam (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)
 -- Add 'discarded' to the list of acceptable statuses in the constraint check
 
 ALTER TABLE mcl_news_items DROP CONSTRAINT IF EXISTS mcl_news_items_status_check;
