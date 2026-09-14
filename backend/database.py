@@ -96,7 +96,7 @@ def seed_mock_db():
             "summary": "Severe water contamination reported in Model Town Extension. Immediate pipeline inspection and repair required.",
             "page_number": 2,
             "status": "pending",
-            "created_at": datetime.now().isoformat()
+            "created_at": "2026-09-13T09:30:00"
         },
         {
             "id": "n2",
@@ -109,8 +109,8 @@ def seed_mock_db():
             "summary": "Road surface damage on Ferozepur Road creating traffic hazards. Patchwork needed urgently.",
             "page_number": 4,
             "status": "dispatched",
-            "created_at": datetime.now().isoformat(),
-            "dispatched_at": datetime.now().isoformat()
+            "created_at": "2026-09-13T10:15:00",
+            "dispatched_at": "2026-09-13T11:00:00"
         },
         {
             "id": "n3",
@@ -123,7 +123,7 @@ def seed_mock_db():
             "summary": "Uncleared waste accumulation in Clock Tower commercial zone causing health concerns.",
             "page_number": 1,
             "status": "pending",
-            "created_at": datetime.now().isoformat()
+            "created_at": "2026-09-13T14:45:00"
         },
         {
             "id": "n4",
@@ -136,8 +136,8 @@ def seed_mock_db():
             "summary": "Encroachment clearance drive successfully executed in Sarabha Nagar.",
             "page_number": 5,
             "status": "resolved",
-            "created_at": datetime.now().isoformat(),
-            "resolved_at": datetime.now().isoformat(),
+            "created_at": "2026-09-13T16:20:00",
+            "resolved_at": "2026-09-13T17:30:00",
             "action_taken_description": "Tehbazari team cleared 14 temporary stalls and restored public walkway."
         },
         {
@@ -151,8 +151,21 @@ def seed_mock_db():
             "summary": "Streetlight outages on Gill Road stretch causing safety concerns during night.",
             "page_number": 3,
             "status": "dispatched",
-            "created_at": datetime.now().isoformat(),
-            "dispatched_at": datetime.now().isoformat()
+            "created_at": "2026-09-14T08:10:00",
+            "dispatched_at": "2026-09-14T09:00:00"
+        },
+        {
+            "id": "n6",
+            "pdf_upload_id": "u1",
+            "headline": "Drainage Overflow Near Dholewal Chowk Industrial Area",
+            "body": "Factory owners report overflowing main drain causing waterlogging on industrial corridor road.",
+            "publication": "Dainik Jagran",
+            "department": "Operations & Maintenance (O&M)",
+            "severity": "High",
+            "summary": "Industrial corridor drainage blockage causing severe waterlogging at Dholewal Chowk.",
+            "page_number": 2,
+            "status": "pending",
+            "created_at": "2026-09-14T10:00:00"
         }
     ]
 
@@ -163,7 +176,7 @@ def seed_mock_db():
         "id": "d1",
         "news_item_id": "n2",
         "officer_id": "o9",
-        "dispatched_at": datetime.now().isoformat(),
+        "dispatched_at": "2026-09-13T11:00:00",
         "remarks": "Inspect Ferozepur road stretch immediately and execute road repair."
     }
 
@@ -171,7 +184,7 @@ def seed_mock_db():
         "id": "d2",
         "news_item_id": "n5",
         "officer_id": "o8",
-        "dispatched_at": datetime.now().isoformat(),
+        "dispatched_at": "2026-09-14T09:00:00",
         "remarks": "Check electrical transformer line on Gill Road."
     }
 
@@ -253,20 +266,70 @@ def get_pdf_upload(upload_id: str) -> Optional[Dict[str, Any]]:
     # Fallback
     return mock_db["uploads"].get(upload_id)
 
+def get_all_pdf_uploads() -> List[Dict[str, Any]]:
+    if supabase:
+        try:
+            res = supabase.table("mcl_pdf_uploads").select("*").order("created_at", desc=True).execute()
+            if res.data:
+                return res.data
+        except Exception as e:
+            print(f"DB Error get_all_pdf_uploads: {e}")
+            
+    return sorted(list(mock_db["uploads"].values()), key=lambda x: x.get("created_at", ""), reverse=True)
 
-# --- OFFICERS ---
+
+# --- OFFICERS & DOMAIN MAPPINGS ---
 def get_officers() -> List[Dict[str, Any]]:
     if supabase:
         try:
-            res = supabase.table("mcl_officers").select("*").execute()
+            res = supabase.table("mcl_officers").select("*").eq("is_active", True).execute()
             if res.data:
                 return res.data
         except Exception as e:
             print(f"DB Error get_officers: {e}")
-    
-    # Fallback
+
     return list(mock_db["officers"].values())
 
+def get_officer(officer_id: str) -> Optional[Dict[str, Any]]:
+    if supabase:
+        try:
+            res = supabase.table("mcl_officers").select("*").eq("id", officer_id).execute()
+            if res.data:
+                return res.data[0]
+        except Exception as e:
+            print(f"DB Error get_officer: {e}")
+
+    return mock_db["officers"].get(officer_id)
+
+def get_domain_mappings() -> List[Dict[str, Any]]:
+    if supabase:
+        try:
+            res = supabase.table("mcl_domain_mapping").select("*").execute()
+            if res.data:
+                return res.data
+        except Exception as e:
+            print(f"DB Error get_domain_mappings: {e}")
+
+    mappings = []
+    for dept, off_id in mock_db["domain_mappings"].items():
+        mappings.append({"department": dept, "suggested_officer_id": off_id})
+    return mappings
+
+def update_domain_mapping(department: str, suggested_officer_id: str) -> None:
+    if supabase:
+        try:
+            supabase.table("mcl_domain_mapping").upsert({
+                "department": department,
+                "suggested_officer_id": suggested_officer_id
+            }, on_conflict="department").execute()
+            return
+        except Exception as e:
+            print(f"DB Error update_domain_mapping: {e}")
+
+    mock_db["domain_mappings"][department] = suggested_officer_id
+
+
+# --- OFFICERS & DOMAIN MAPPINGS ---
 def create_officer(officer: Dict[str, Any]) -> Dict[str, Any]:
     if supabase:
         try:
@@ -275,8 +338,6 @@ def create_officer(officer: Dict[str, Any]) -> Dict[str, Any]:
                 return res.data[0]
         except Exception as e:
             print(f"DB Error create_officer: {e}")
-    
-    # Fallback
     import uuid
     uid = str(uuid.uuid4())
     officer["id"] = uid
@@ -291,8 +352,6 @@ def update_officer(officer_id: str, updates: Dict[str, Any]) -> Optional[Dict[st
                 return res.data[0]
         except Exception as e:
             print(f"DB Error update_officer: {e}")
-    
-    # Fallback
     if officer_id in mock_db["officers"]:
         mock_db["officers"][officer_id].update(updates)
         return mock_db["officers"][officer_id]
@@ -306,71 +365,42 @@ def delete_officer(officer_id: str) -> bool:
         except Exception as e:
             print(f"DB Error delete_officer: {e}")
             return False
-    
-    # Fallback
     if officer_id in mock_db["officers"]:
         del mock_db["officers"][officer_id]
         return True
     return False
 
-
-# --- DOMAIN MAPPINGS ---
-def get_domain_mappings() -> List[Dict[str, Any]]:
-    if supabase:
-        try:
-            res = supabase.table("mcl_domain_mapping").select("*").execute()
-            if res.data:
-                return res.data
-        except Exception as e:
-            print(f"DB Error get_domain_mappings: {e}")
-    
-    # Fallback
-    mappings = []
-    for dept, officer_id in mock_db["domain_mappings"].items():
-        mappings.append({
-            "id": f"map_{dept}",
-            "department": dept,
-            "suggested_officer_id": officer_id
-        })
-    return mappings
-
 def update_domain_mappings(mappings: List[Dict[str, Any]]) -> bool:
-    if supabase:
-        try:
-            for mapping in mappings:
-                supabase.table("mcl_domain_mapping").upsert({
-                    "department": mapping["department"],
-                    "suggested_officer_id": mapping["suggested_officer_id"]
-                }, on_conflict="department").execute()
-            return True
-        except Exception as e:
-            print(f"DB Error update_domain_mappings: {e}")
-            return False
-    
-    # Fallback
     for m in mappings:
-        mock_db["domain_mappings"][m["department"]] = m["suggested_officer_id"]
+        update_domain_mapping(m["department"], m["suggested_officer_id"])
     return True
 
 
-# --- NEWS ITEMS ---
+# --- NEWS ITEMS & DISPATCHES ---
 def create_news_item(news_item: Dict[str, Any]) -> Dict[str, Any]:
+    res = create_news_items([news_item])
+    return res[0] if res else news_item
+
+def create_news_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if supabase:
         try:
-            res = supabase.table("mcl_news_items").insert(news_item).execute()
+            res = supabase.table("mcl_news_items").insert(items).execute()
             if res.data:
-                return res.data[0]
+                return res.data
         except Exception as e:
-            print(f"DB Error create_news_item: {e}")
-    
-    # Fallback
+            print(f"DB Error create_news_items: {e}")
+
     import uuid
-    uid = str(uuid.uuid4())
-    news_item["id"] = uid
-    news_item["status"] = news_item.get("status", "pending")
-    news_item["created_at"] = news_item.get("created_at") or datetime.now().isoformat()
-    mock_db["news_items"][uid] = news_item
-    return news_item
+    created = []
+    for item in items:
+        uid = str(uuid.uuid4())
+        record = dict(item)
+        record["id"] = uid
+        record["status"] = "pending"
+        record["created_at"] = datetime.now().isoformat()
+        mock_db["news_items"][uid] = record
+        created.append(record)
+    return created
 
 def get_news_items(date_str: Optional[str] = None, department: Optional[str] = None, severity: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
     news_items_list = []
@@ -384,7 +414,11 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
             if severity:
                 q = q.eq("severity", severity)
             if date_str:
-                q = q.gte("created_at", f"{date_str}T00:00:00").lte("created_at", f"{date_str}T23:59:59")
+                if status == "pending":
+                    # For pending items, include items on or before date_str
+                    q = q.lte("created_at", f"{date_str}T23:59:59")
+                else:
+                    q = q.gte("created_at", f"{date_str}T00:00:00").lte("created_at", f"{date_str}T23:59:59")
             
             res = q.execute()
             if res.data:
@@ -400,7 +434,11 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
         if severity:
             news_items_list = [x for x in news_items_list if x.get("severity") == severity]
         if date_str:
-            news_items_list = [x for x in news_items_list if x.get("created_at", "").startswith(date_str)]
+            if status == "pending":
+                # For pending items, include items on or before date_str
+                news_items_list = [x for x in news_items_list if x.get("created_at", "")[:10] <= date_str]
+            else:
+                news_items_list = [x for x in news_items_list if x.get("created_at", "").startswith(date_str)]
 
     all_mappings = get_domain_mappings()
     all_officers = get_officers()

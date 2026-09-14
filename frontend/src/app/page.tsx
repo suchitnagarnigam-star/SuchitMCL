@@ -165,7 +165,7 @@ export default function Home() {
       const user = localStorage.getItem("mcl_auth_user");
       if (!user) {
         setIsAuthenticated(false);
-        router.push("/login");
+        window.location.href = "/login";
         return;
       } else {
         setIsAuthenticated(true);
@@ -180,7 +180,7 @@ export default function Home() {
         clearInterval(pollingInterval.current);
       }
     };
-  }, [router]);
+  }, []);
 
   if (isAuthenticated === null || isAuthenticated === false) {
     return (
