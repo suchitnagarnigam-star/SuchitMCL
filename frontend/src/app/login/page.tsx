@@ -248,26 +248,6 @@ export default function LoginPage() {
                       Keep me logged in
                     </span>
                   </label>
-
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUsername("superadmin");
-                        setPassword("Ojasvialankar1@");
-                      }}
-                      className="text-[11px] font-bold text-purple-700 hover:underline bg-purple-50 px-2 py-0.5 rounded border border-purple-200"
-                    >
-                      Fill Super Admin
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDemoFill}
-                      className="text-[11px] font-bold text-[#FF671F] hover:underline"
-                    >
-                      Fill Admin
-                    </button>
-                  </div>
                 </div>
 
                 {/* Primary Submit Button */}
