@@ -5,8 +5,8 @@ import { UserPlus, Shield, UserCheck, ShieldAlert, Trash2, Eye, EyeOff, Search, 
 
 interface UserRecord {
   id: string;
-  username: str;
-  full_name: str;
+  username: string;
+  full_name: string;
   role: "superadmin" | "admin" | "officer" | string;
   is_active: boolean;
   created_at?: string;
