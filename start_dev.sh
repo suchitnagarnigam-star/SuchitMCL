@@ -17,7 +17,7 @@ export NODE_OPTIONS="--dns-result-order=ipv4first"
 rm -rf frontend/.next
 
 echo "🚀 Launching FastAPI Backend (http://localhost:8000)..."
-nohup "$SCRIPT_DIR/.venv/bin/uvicorn" backend.main:app --host 0.0.0.0 --port 8000 > "$SCRIPT_DIR/backend.log" 2>&1 &
+nohup "$SCRIPT_DIR/.venv/bin/uvicorn" backend.main:app --host 0.0.0.0 --port 8000 > "$SCRIPT_DIR/backend.log" 2>&1 & disown
 
 sleep 2
 
