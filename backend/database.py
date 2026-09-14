@@ -84,6 +84,97 @@ def seed_mock_db():
     for m in mappings:
         mock_db["domain_mappings"][m["department"]] = m["suggested_officer_id"]
 
+    sample_news = [
+        {
+            "id": "n1",
+            "pdf_upload_id": "u1",
+            "headline": "Contaminated Water Supply Complaint in Model Town Extension",
+            "body": "Residents of Model Town Extension reported dirty and foul-smelling water supply for the past three days. Pipeline damage suspect near block B.",
+            "publication": "Dainik Bhaskar",
+            "department": "Operations & Maintenance (O&M)",
+            "severity": "High",
+            "summary": "Severe water contamination reported in Model Town Extension. Immediate pipeline inspection and repair required.",
+            "page_number": 2,
+            "status": "pending",
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": "n2",
+            "pdf_upload_id": "u1",
+            "headline": "Large Potholes Causing Traffic Congestion on Ferozepur Road",
+            "body": "Commuters face severe delays due to deep potholes near Westend Mall stretch on Ferozepur Road following recent rains.",
+            "publication": "The Tribune",
+            "department": "Bridges & Roads (B&R)",
+            "severity": "Medium",
+            "summary": "Road surface damage on Ferozepur Road creating traffic hazards. Patchwork needed urgently.",
+            "page_number": 4,
+            "status": "dispatched",
+            "created_at": datetime.now().isoformat(),
+            "dispatched_at": datetime.now().isoformat()
+        },
+        {
+            "id": "n3",
+            "pdf_upload_id": "u1",
+            "headline": "Garbage Dump Accumulation Near Clock Tower Market Area",
+            "body": "Shopkeepers complain of uncleared waste dumps creating foul smell and sanitation risks in central market area near Clock Tower.",
+            "publication": "Jagran",
+            "department": "Sanitation & Vector Control",
+            "severity": "High",
+            "summary": "Uncleared waste accumulation in Clock Tower commercial zone causing health concerns.",
+            "page_number": 1,
+            "status": "pending",
+            "created_at": datetime.now().isoformat()
+        },
+        {
+            "id": "n4",
+            "pdf_upload_id": "u1",
+            "headline": "Commercial Encroachment Removed in Sarabha Nagar Main Market",
+            "body": "MCL Tehbazari team conducted drive removing temporary structures blocking pedestrian walkways in Sarabha Nagar market.",
+            "publication": "Ajit",
+            "department": "Tehbazari / Land & Encroachment",
+            "severity": "Low",
+            "summary": "Encroachment clearance drive successfully executed in Sarabha Nagar.",
+            "page_number": 5,
+            "status": "resolved",
+            "created_at": datetime.now().isoformat(),
+            "resolved_at": datetime.now().isoformat(),
+            "action_taken_description": "Tehbazari team cleared 14 temporary stalls and restored public walkway."
+        },
+        {
+            "id": "n5",
+            "pdf_upload_id": "u1",
+            "headline": "Streetlight Failure Reported on Gill Road Stretch",
+            "body": "Multiple streetlights between Gill Chowk and Canal bridge non-functional for 2 days.",
+            "publication": "Punjab Kesari",
+            "department": "Operations & Maintenance (O&M)",
+            "severity": "Medium",
+            "summary": "Streetlight outages on Gill Road stretch causing safety concerns during night.",
+            "page_number": 3,
+            "status": "dispatched",
+            "created_at": datetime.now().isoformat(),
+            "dispatched_at": datetime.now().isoformat()
+        }
+    ]
+
+    for item in sample_news:
+        mock_db["news_items"][item["id"]] = item
+
+    mock_db["dispatches"]["d1"] = {
+        "id": "d1",
+        "news_item_id": "n2",
+        "officer_id": "o9",
+        "dispatched_at": datetime.now().isoformat(),
+        "remarks": "Inspect Ferozepur road stretch immediately and execute road repair."
+    }
+
+    mock_db["dispatches"]["d2"] = {
+        "id": "d2",
+        "news_item_id": "n5",
+        "officer_id": "o8",
+        "dispatched_at": datetime.now().isoformat(),
+        "remarks": "Check electrical transformer line on Gill Road."
+    }
+
 seed_mock_db()
 
 # --- PDF UPLOADS ---

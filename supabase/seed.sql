@@ -40,3 +40,12 @@ VALUES
     ('Public Grievance Redressal / IT Cell', (SELECT id FROM mcl_officers WHERE short_code = 'JC (V)')),
     ('Fire Brigade & Emergency Services', (SELECT id FROM mcl_officers WHERE short_code = 'JC (V)'))
 ON CONFLICT (department) DO UPDATE SET suggested_officer_id = EXCLUDED.suggested_officer_id;
+
+-- Seed Sample News Items for Control Desk Dashboard
+INSERT INTO mcl_news_items (id, headline, body, publication, department, severity, summary, page_number, status)
+VALUES
+    ('a1111111-1111-1111-1111-111111111111', 'Contaminated Water Supply Complaint in Model Town Extension', 'Residents of Model Town Extension reported dirty and foul-smelling water supply for the past three days. Pipeline damage suspect near block B.', 'Dainik Bhaskar', 'Operations & Maintenance (O&M)', 'High', 'Severe water contamination reported in Model Town Extension. Immediate pipeline inspection and repair required.', 2, 'pending'),
+    ('a2222222-2222-2222-2222-222222222222', 'Large Potholes Causing Traffic Congestion on Ferozepur Road', 'Commuters face severe delays due to deep potholes near Westend Mall stretch on Ferozepur Road following recent rains.', 'The Tribune', 'Bridges & Roads (B&R)', 'Medium', 'Road surface damage on Ferozepur Road creating traffic hazards. Patchwork needed urgently.', 4, 'dispatched'),
+    ('a3333333-3333-3333-3333-333333333333', 'Garbage Dump Accumulation Near Clock Tower Market Area', 'Shopkeepers complain of uncleared waste dumps creating foul smell and sanitation risks in central market area near Clock Tower.', 'Jagran', 'Sanitation & Vector Control', 'High', 'Uncleared waste accumulation in Clock Tower commercial zone causing health concerns.', 1, 'pending'),
+    ('a4444444-4444-4444-4444-444444444444', 'Commercial Encroachment Removed in Sarabha Nagar Main Market', 'MCL Tehbazari team conducted drive removing temporary structures blocking pedestrian walkways in Sarabha Nagar market.', 'Ajit', 'Tehbazari / Land & Encroachment', 'Low', 'Encroachment clearance drive successfully executed in Sarabha Nagar.', 5, 'dispatched')
+ON CONFLICT (id) DO NOTHING;

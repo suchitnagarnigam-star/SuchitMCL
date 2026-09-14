@@ -9,6 +9,7 @@ import MappingTab from "@/components/mapping-tab";
 import ResolvedTab from "@/components/resolved-tab";
 import DispatchedTab from "@/components/dispatched-tab";
 import GovTopHeader from "@/components/gov-header";
+import { useRouter } from "next/navigation";
 
 interface Officer {
   id: string;
@@ -23,6 +24,8 @@ interface Officer {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [officers, setOfficers] = useState<Officer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +161,17 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const user = localStorage.getItem("mcl_auth_user");
+      if (!user) {
+        setIsAuthenticated(false);
+        router.push("/login");
+        return;
+      } else {
+        setIsAuthenticated(true);
+      }
+    }
+
     fetchOfficers();
     
     // Cleanup polling on unmount of the entire app
@@ -166,7 +180,16 @@ export default function Home() {
         clearInterval(pollingInterval.current);
       }
     };
-  }, []);
+  }, [router]);
+
+  if (isAuthenticated === null || isAuthenticated === false) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
+        <div className="w-10 h-10 border-4 border-blue-100 border-t-[#2563EB] rounded-full animate-spin" />
+        <p className="text-xs font-semibold text-slate-600">Verifying Officer Session...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
