@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     GOOGLE_SHEET_TAB_NAME: str = "Sheet1"
 
     class Config:
-        env_file = ".env"
+        env_file = (os.path.join(os.path.dirname(__file__), ".env"), ".env")
         extra = "ignore"
 
 settings = Settings()

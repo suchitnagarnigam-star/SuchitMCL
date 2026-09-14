@@ -175,7 +175,7 @@ export function NICBadge({ className = "h-7" }: { className?: string }) {
 export function MCLLogo({ className = "w-14 h-14" }: { className?: string }) {
   return (
     <img 
-      src="/mcl-logo.jpg" 
+      src="/mcl-logo.png" 
       alt="Municipal Corporation Ludhiana Logo" 
       className={`rounded-full object-contain bg-white p-0.5 border border-slate-200 ${className}`}
     />

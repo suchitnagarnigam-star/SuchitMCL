@@ -8,7 +8,9 @@ import OverviewTab from "@/components/overview-tab";
 import MappingTab from "@/components/mapping-tab";
 import ResolvedTab from "@/components/resolved-tab";
 import DispatchedTab from "@/components/dispatched-tab";
+import UsersTab from "@/components/users-tab";
 import GovTopHeader from "@/components/gov-header";
+import { useRouter } from "next/navigation";
 
 interface Officer {
   id: string;
@@ -23,6 +25,8 @@ interface Officer {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [officers, setOfficers] = useState<Officer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,6 +162,16 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const user = localStorage.getItem("mcl_auth_user");
+      if (!user) {
+        setIsAuthenticated(false);
+        router.replace("/login");
+        return;
+      }
+      setIsAuthenticated(true);
+    }
+
     fetchOfficers();
     
     // Cleanup polling on unmount of the entire app
@@ -166,7 +180,20 @@ export default function Home() {
         clearInterval(pollingInterval.current);
       }
     };
-  }, []);
+  }, [router]);
+
+  if (isAuthenticated === false) {
+    return null;
+  }
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-3">
+        <div className="w-8 h-8 border-3 border-blue-100 border-t-[#2563EB] rounded-full animate-spin" />
+        <p className="text-xs font-semibold text-slate-500">Loading Control Desk...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -193,6 +220,7 @@ export default function Home() {
                 {activeTab === "dispatched" && "Dispatched Intelligence Log"}
                 {activeTab === "resolved" && "Transparency & Resolution Register"}
                 {activeTab === "upload" && "Daily Newspaper PDF Ingestion"}
+                {activeTab === "users" && "User Management & System Access Authority"}
               </h2>
               <p className="text-xs text-slate-500 mt-1.5">
                 Active Session: Commissioner Office Control Room • Ludhiana, Punjab
@@ -248,6 +276,10 @@ export default function Home() {
                 triggerUpload={triggerUpload}
                 handleReset={handleResetUpload}
               />
+            )}
+
+            {activeTab === "users" && (
+              <UsersTab />
             )}
           </div>
         )}
