@@ -10,7 +10,6 @@ import {
   Eye, 
   EyeOff, 
   ArrowRight, 
-  Building2, 
   CheckCircle2,
   KeyRound,
   HelpCircle,
@@ -24,7 +23,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [selectedZone, setSelectedZone] = useState("all");
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showAdminNotice, setShowAdminNotice] = useState(false);
@@ -224,30 +222,6 @@ export default function LoginPage() {
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
-                  </div>
-                </div>
-
-                {/* Administrative Zone Selection */}
-                <div className="space-y-1.5 pt-1">
-                  <label htmlFor="zone" className="block text-xs font-bold text-[#1E293B] tracking-wide">
-                    Designated Zone / Department
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Building2 className="w-4 h-4" />
-                    </div>
-                    <select
-                      id="zone"
-                      value={selectedZone}
-                      onChange={(e) => setSelectedZone(e.target.value)}
-                      className="w-full pl-10 pr-8 py-2.5 bg-slate-50 border border-[#E2E8F0] rounded-xl text-xs text-[#1E293B] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all font-semibold"
-                    >
-                      <option value="all">Headquarters Control Desk — Ludhiana</option>
-                      <option value="zone_a">Zone A (Clock Tower / Mata Rani Chowk)</option>
-                      <option value="zone_b">Zone B (Shingar Cinema Road / Industrial Area)</option>
-                      <option value="zone_c">Zone C (Gill Road / Model Town)</option>
-                      <option value="zone_d">Zone D (Sarabha Nagar / Ferozepur Road)</option>
-                    </select>
                   </div>
                 </div>
 
