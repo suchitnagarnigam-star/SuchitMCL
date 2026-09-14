@@ -165,11 +165,10 @@ export default function Home() {
       const user = localStorage.getItem("mcl_auth_user");
       if (!user) {
         setIsAuthenticated(false);
-        window.location.href = "/login";
+        router.replace("/login");
         return;
-      } else {
-        setIsAuthenticated(true);
       }
+      setIsAuthenticated(true);
     }
 
     fetchOfficers();
@@ -180,13 +179,17 @@ export default function Home() {
         clearInterval(pollingInterval.current);
       }
     };
-  }, []);
+  }, [router]);
 
-  if (isAuthenticated === null || isAuthenticated === false) {
+  if (isAuthenticated === false) {
+    return null;
+  }
+
+  if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-4">
-        <div className="w-10 h-10 border-4 border-blue-100 border-t-[#2563EB] rounded-full animate-spin" />
-        <p className="text-xs font-semibold text-slate-600">Verifying Officer Session...</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center space-y-3">
+        <div className="w-8 h-8 border-3 border-blue-100 border-t-[#2563EB] rounded-full animate-spin" />
+        <p className="text-xs font-semibold text-slate-500">Loading Control Desk...</p>
       </div>
     );
   }

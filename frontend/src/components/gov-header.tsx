@@ -39,7 +39,7 @@ export default function GovTopHeader() {
       localStorage.removeItem("mcl_auth_user");
       localStorage.removeItem("mcl_auth_token");
       setAuthUser(null);
-      window.location.reload();
+      window.location.href = "/login";
     }
   };
 
