@@ -1,5 +1,5 @@
-import React from "react";
-import { LayoutDashboard, FileUp, ShieldCheck, BarChart3, Briefcase, FileSpreadsheet, LogIn } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { LayoutDashboard, FileUp, ShieldCheck, BarChart3, Briefcase, FileSpreadsheet, LogIn, Users, Shield } from "lucide-react";
 import { MCLLogo } from "./gov-assets";
 import Link from "next/link";
 
@@ -9,6 +9,24 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("mcl_auth_user");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          setUserRole(parsed.role || null);
+          setUserName(parsed.full_name || parsed.username || null);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }, []);
+
   const menuItems = [
     { id: "overview", name: "Overview", icon: BarChart3 },
     { id: "desk", name: "Commissioner's Desk", icon: LayoutDashboard },
@@ -17,6 +35,11 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: "resolved", name: "Resolved", icon: ShieldCheck },
     { id: "upload", name: "Upload Daily PDF", icon: FileUp },
   ];
+
+  // Dynamically add User Management only for superadmin
+  if (userRole === "superadmin") {
+    menuItems.push({ id: "users", name: "User Management", icon: Users });
+  }
 
   return (
     <>
@@ -41,17 +64,22 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
+            const isUsersTab = item.id === "users";
             return (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
                 className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-bold tracking-wide transition-all duration-200 ${
                   isActive
-                    ? "bg-sidebarActiveBg text-sidebarBg shadow-md shadow-slate-900/10"
+                    ? isUsersTab
+                      ? "bg-purple-600 text-white shadow-lg shadow-purple-900/40"
+                      : "bg-sidebarActiveBg text-sidebarBg shadow-md shadow-slate-900/10"
+                    : isUsersTab
+                    ? "text-purple-300 hover:text-white hover:bg-purple-900/40 border border-purple-500/30"
                     : "text-slate-300 hover:text-white hover:bg-slate-800"
                 }`}
               >
-                <Icon className={`w-4.5 h-4.5 ${isActive ? "text-sidebarBg" : "text-slate-400"}`} />
+                <Icon className={`w-4.5 h-4.5 ${isActive ? (isUsersTab ? "text-white" : "text-sidebarBg") : (isUsersTab ? "text-purple-400" : "text-slate-400")}`} />
                 <span>{item.name}</span>
               </button>
             );

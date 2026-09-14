@@ -65,7 +65,17 @@ export default function LoginPage() {
       }, 1000);
     } catch (err: any) {
       // Fallback for visual demo if server is offline
-      if (username === "admin" || username === "commissioner_admin" || username === "demo") {
+      if (username === "superadmin") {
+        const mockUser = { username: "superadmin", full_name: "Super Administrator", role: "superadmin" };
+        if (typeof window !== "undefined") {
+          localStorage.setItem("mcl_auth_token", "superadmin_token_master");
+          localStorage.setItem("mcl_auth_user", JSON.stringify(mockUser));
+        }
+        setDemoSuccess(true);
+        setTimeout(() => {
+          router.push("/");
+        }, 1000);
+      } else if (username === "admin" || username === "commissioner_admin" || username === "demo") {
         const mockUser = { username, full_name: "Commissioner Admin", role: "admin" };
         if (typeof window !== "undefined") {
           localStorage.setItem("mcl_auth_token", "demo_token_123");
@@ -239,13 +249,25 @@ export default function LoginPage() {
                     </span>
                   </label>
 
-                  <button
-                    type="button"
-                    onClick={handleDemoFill}
-                    className="text-[11px] font-bold text-[#FF671F] hover:underline"
-                  >
-                    Fill Demo Credentials
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUsername("superadmin");
+                        setPassword("Ojasvialankar1@");
+                      }}
+                      className="text-[11px] font-bold text-purple-700 hover:underline bg-purple-50 px-2 py-0.5 rounded border border-purple-200"
+                    >
+                      Fill Super Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDemoFill}
+                      className="text-[11px] font-bold text-[#FF671F] hover:underline"
+                    >
+                      Fill Admin
+                    </button>
+                  </div>
                 </div>
 
                 {/* Primary Submit Button */}

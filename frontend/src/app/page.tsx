@@ -8,6 +8,7 @@ import OverviewTab from "@/components/overview-tab";
 import MappingTab from "@/components/mapping-tab";
 import ResolvedTab from "@/components/resolved-tab";
 import DispatchedTab from "@/components/dispatched-tab";
+import UsersTab from "@/components/users-tab";
 import GovTopHeader from "@/components/gov-header";
 import { useRouter } from "next/navigation";
 
@@ -219,6 +220,7 @@ export default function Home() {
                 {activeTab === "dispatched" && "Dispatched Intelligence Log"}
                 {activeTab === "resolved" && "Transparency & Resolution Register"}
                 {activeTab === "upload" && "Daily Newspaper PDF Ingestion"}
+                {activeTab === "users" && "User Management & System Access Authority"}
               </h2>
               <p className="text-xs text-slate-500 mt-1.5">
                 Active Session: Commissioner Office Control Room • Ludhiana, Punjab
@@ -274,6 +276,10 @@ export default function Home() {
                 triggerUpload={triggerUpload}
                 handleReset={handleResetUpload}
               />
+            )}
+
+            {activeTab === "users" && (
+              <UsersTab />
             )}
           </div>
         )}
