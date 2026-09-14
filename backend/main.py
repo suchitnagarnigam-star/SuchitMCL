@@ -71,6 +71,10 @@ class ActionUpdateSchema(BaseModel):
     status: str  # pending / dispatched / in_progress / resolved
     action_taken_description: str
 
+class LoginSchema(BaseModel):
+    username: str
+    password: str
+
 
 # --- HELPER FUNCTIONS ---
 
@@ -119,6 +123,23 @@ Municipal Corporation Ludhiana"""
 
 
 # --- ENDPOINTS ---
+
+@app.post("/login")
+def login(payload: LoginSchema):
+    user = db.authenticate_user(payload.username, payload.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    return {
+        "status": "success",
+        "token": f"mcl_token_{user.get('id', 'default')}",
+        "user": {
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "full_name": user.get("full_name"),
+            "role": user.get("role", "officer")
+        }
+    }
+
 
 @app.post("/upload-pdf")
 async def upload_pdf(

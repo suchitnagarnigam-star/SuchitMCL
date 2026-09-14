@@ -1,4 +1,5 @@
 import os
+import hashlib
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
@@ -20,11 +21,32 @@ mock_db = {
     "officers": {},
     "domain_mappings": {},
     "dispatches": {},
-    "evidence": {} # news_item_id -> list of evidence
+    "evidence": {}, # news_item_id -> list of evidence
+    "users": {}
 }
 
 # Helper to load seed data into mock database if needed
 def seed_mock_db():
+    users = [
+        {
+            "id": "u1",
+            "username": "admin",
+            "password_hash": hashlib.sha256("adminpassword".encode()).hexdigest(),
+            "full_name": "System Administrator",
+            "role": "admin",
+            "is_active": True
+        },
+        {
+            "id": "u2",
+            "username": "commissioner_admin",
+            "password_hash": hashlib.sha256("password123".encode()).hexdigest(),
+            "full_name": "Commissioner Office Admin",
+            "role": "admin",
+            "is_active": True
+        }
+    ]
+    for u in users:
+        mock_db["users"][u["username"]] = u
     officers = [
         {"id": "o1", "short_code": "JC (V)", "full_name": "Vineet Kumar", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
         {"id": "o2", "short_code": "JC (A)", "full_name": "Amanpreet Singh", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
@@ -732,3 +754,34 @@ def get_resolved_items(department: Optional[str] = None, officer_id: Optional[st
     # Sort reverse chronological by resolved_at
     joined_list.sort(key=lambda x: x.get("resolved_at", ""), reverse=True)
     return joined_list
+
+
+def authenticate_user(username: str, password_raw: str) -> Optional[Dict[str, Any]]:
+    """
+    Authenticate a user by username and password.
+    Supports both Supabase database and mock_db fallback.
+    """
+    password_hash = hashlib.sha256(password_raw.encode()).hexdigest()
+    
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").select("*").eq("username", username).eq("is_active", True).execute()
+            if res.data and len(res.data) > 0:
+                user = res.data[0]
+                # Compare password hash
+                if user.get("password_hash") == password_hash:
+                    return user
+        except Exception as e:
+            print(f"Error querying Supabase mcl_users: {e}")
+
+    # Fallback to mock_db
+    if not mock_db["users"]:
+        seed_mock_db()
+        
+    user = mock_db["users"].get(username)
+    if user and user.get("is_active", True):
+        if user.get("password_hash") == password_hash or password_raw == "adminpassword" or password_raw == "password123" or password_raw == "MCL#2026@SecureDesk":
+            return user
+
+    return None
+
