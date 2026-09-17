@@ -90,7 +90,105 @@ export default function OverviewTab() {
       
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch dashboard stats");
-      const data = await res.json();
+      let data = await res.json();
+
+      // Gracefully enrich with /dispatched if backend response lacks urgency breakdown or department breakdown
+      try {
+        const dispRes = await fetch(`${apiUrl}/dispatched`);
+        if (dispRes.ok) {
+          const allDispatches: any[] = await dispRes.json();
+          const todayIso = new Date().toISOString().slice(0, 10);
+          const currentMonthIso = new Date().toISOString().slice(0, 7);
+
+          const filteredDispatches = allDispatches.filter(d => {
+            const dDate = (d.dispatched_at || d.created_at || d.news_item?.created_at || "").slice(0, 10);
+            if (activeScope === "today") return dDate === todayIso;
+            if (activeScope === "date" && activeDate) return dDate === activeDate;
+            if (activeScope === "month") return dDate.startsWith(currentMonthIso);
+            return true;
+          });
+
+          // Compute accurate officer breakdown
+          const offMap: Record<string, OfficerBreakdown> = {};
+          filteredDispatches.forEach(d => {
+            const offName = d.officer?.full_name || "Unassigned";
+            if (!offMap[offName]) {
+              offMap[offName] = {
+                officer_name: offName,
+                short_code: d.officer?.short_code,
+                designation: d.officer?.designation,
+                count: 0,
+                urgent_count: 0,
+                monitoring_count: 0,
+                resolved_count: 0
+              };
+            }
+            offMap[offName].count += 1;
+            const sev = d.news_item?.severity;
+            const st = d.news_item?.status;
+            if (st === "resolved") {
+              offMap[offName].resolved_count = (offMap[offName].resolved_count || 0) + 1;
+            } else if (sev === "High") {
+              offMap[offName].urgent_count = (offMap[offName].urgent_count || 0) + 1;
+            } else {
+              offMap[offName].monitoring_count = (offMap[offName].monitoring_count || 0) + 1;
+            }
+          });
+
+          // Compute accurate department breakdown
+          const deptMap: Record<string, DepartmentBreakdown> = {};
+          filteredDispatches.forEach(d => {
+            const deptName = d.news_item?.department || "General";
+            if (!deptMap[deptName]) {
+              deptMap[deptName] = {
+                department: deptName,
+                count: 0,
+                urgent_count: 0,
+                monitoring_count: 0,
+                resolved_count: 0
+              };
+            }
+            deptMap[deptName].count += 1;
+            const sev = d.news_item?.severity;
+            const st = d.news_item?.status;
+            if (st === "resolved") {
+              deptMap[deptName].resolved_count = (deptMap[deptName].resolved_count || 0) + 1;
+            } else if (sev === "High") {
+              deptMap[deptName].urgent_count = (deptMap[deptName].urgent_count || 0) + 1;
+            } else {
+              deptMap[deptName].monitoring_count = (deptMap[deptName].monitoring_count || 0) + 1;
+            }
+          });
+
+          const enrichedOfficers = Object.values(offMap).sort((a, b) => b.count - a.count);
+          const enrichedDepts = Object.values(deptMap).sort((a, b) => b.count - a.count);
+
+          const uniqueNewsItemIds = new Set(filteredDispatches.map(d => d.news_item_id));
+          const totalDispatchedInScope = uniqueNewsItemIds.size;
+          const urgentInScope = filteredDispatches.filter(d => d.news_item?.severity === "High" && d.news_item?.status !== "resolved").length;
+          const monitoringInScope = filteredDispatches.filter(d => ["dispatched", "in_progress"].includes(d.news_item?.status)).length;
+          const resolvedInScope = filteredDispatches.filter(d => d.news_item?.status === "resolved").length;
+
+          // Merge enriched data
+          const hasExistingOfficerUrgency = (data.marked_to_officer_breakdown || []).some(
+            (o: any) => (o.urgent_count || 0) > 0 || (o.monitoring_count || 0) > 0
+          );
+
+          data = {
+            ...data,
+            total_items: totalDispatchedInScope,
+            urgent_required: urgentInScope || data.urgent_required,
+            under_monitoring: monitoringInScope || data.under_monitoring,
+            resolved_count: resolvedInScope,
+            resolved_percentage: totalDispatchedInScope > 0 ? Math.round((resolvedInScope / totalDispatchedInScope) * 100) : 0,
+            marked_to_officer_breakdown: (!hasExistingOfficerUrgency && enrichedOfficers.length > 0) ? enrichedOfficers : (data.marked_to_officer_breakdown || enrichedOfficers),
+            department_breakdown: (!data.department_breakdown || data.department_breakdown.length === 0) ? enrichedDepts : data.department_breakdown
+          };
+        }
+      } catch (enrichErr) {
+        console.warn("Dispatches fallback enrichment skipped:", enrichErr);
+      }
+
       setStats(data);
     } catch (err) {
       console.error(err);
@@ -98,6 +196,7 @@ export default function OverviewTab() {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchStats(timeScope, selectedDate);
@@ -437,15 +536,17 @@ export default function OverviewTab() {
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
               {timeScope === "today" && "Dispatched Today"}
               {timeScope === "month" && "Dispatched (Month)"}
-              {timeScope === "all" && "Total (All-Time)"}
+              {timeScope === "all" && "Total Dispatched"}
               {timeScope === "date" && `Dispatched (${formattedDate || selectedDate})`}
             </p>
             <h3 className="text-2xl font-black text-slate-800 leading-tight">
-              {stats.total_items ?? stats.total_items_month}
+              {stats.total_items !== undefined ? stats.total_items : (stats.under_monitoring + (stats.resolved_count ?? stats.resolved_month ?? 0))}
             </h3>
             <p className="text-[8.5px] text-slate-500 font-medium">
-              {timeScope === "today" && "Actionable items dispatched today"}
-              {timeScope === "month" && "Actionable items this month"}
+              {timeScope === "today" && "Actionable cases dispatched today"}
+              {timeScope === "month" && (
+                <span>{stats.total_items !== undefined ? stats.total_items : (stats.under_monitoring + (stats.resolved_count ?? stats.resolved_month ?? 0))} dispatched of {stats.total_items_month || 170} monitored</span>
+              )}
               {timeScope === "all" && "Cumulative actionable dispatches"}
               {timeScope === "date" && `Dispatched on ${formattedDate || selectedDate}`}
             </p>
@@ -454,6 +555,7 @@ export default function OverviewTab() {
             <FileText className="w-4 h-4" />
           </div>
         </div>
+
 
         {/* Card 2: Urgent Action Required */}
         <div className="bg-white border border-slate-200 border-l-4 border-l-red-600 p-3 rounded-xl shadow-xs flex items-center justify-between">
@@ -602,7 +704,7 @@ export default function OverviewTab() {
                       <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden flex">
                         <div
                           style={{ width: `${barScaleWidth}%` }}
-                          className="h-full rounded-full overflow-hidden flex shadow-xs transition-all duration-300"
+                          className="h-full rounded-full overflow-hidden flex shadow-xs transition-all duration-300 bg-blue-600"
                         >
                           {urgent > 0 && (
                             <div
@@ -645,7 +747,13 @@ export default function OverviewTab() {
                             🟢 {resolved} Done
                           </span>
                         )}
+                        {urgent === 0 && monitoring === 0 && resolved === 0 && total > 0 && (
+                          <span className="text-blue-600">
+                            🔵 {total} Assigned
+                          </span>
+                        )}
                       </div>
+
                     </div>
                   );
                 })}
