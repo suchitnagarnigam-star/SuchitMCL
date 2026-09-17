@@ -35,9 +35,11 @@ interface NewsItem {
   status: string; // dispatched / in_progress / resolved
   remarks?: string | null;
   dispatched_at?: string;
+  created_at?: string;
   action_taken_description?: string | null;
   evidence?: Evidence[];
 }
+
 
 interface ActiveOfficer {
   id: string;
@@ -128,7 +130,22 @@ export default function MappingTab() {
       const res = await fetch(`${apiUrl}/officer-mapping`);
       if (!res.ok) throw new Error("Failed to load officer mappings");
       const data = await res.json();
+      
+      // Ensure each officer's active_items has the latest news first
+      if (Array.isArray(data)) {
+        data.forEach((o: ActiveOfficer) => {
+          if (o.active_items && Array.isArray(o.active_items)) {
+            o.active_items.sort((a, b) => {
+              const dateA = a.dispatched_at || a.created_at || (typeof a.summary === "object" && a.summary?.when) || "";
+              const dateB = b.dispatched_at || b.created_at || (typeof b.summary === "object" && b.summary?.when) || "";
+              return String(dateB).localeCompare(String(dateA));
+            });
+          }
+        });
+      }
+
       setOfficers(data);
+
 
       if (data.length > 0) {
         if (selectFirst || !selectedOfficerId || !data.some((o: ActiveOfficer) => o.id === selectedOfficerId)) {
@@ -451,9 +468,16 @@ export default function MappingTab() {
                   </div>
                 </div>
 
-                {/* News Items list */}
+                {/* News Items list (Sorted latest first) */}
                 <div className="space-y-4">
-                  {selectedOfficer.active_items.map(item => {
+                  {[...selectedOfficer.active_items]
+                    .sort((a, b) => {
+                      const dateA = a.dispatched_at || a.created_at || (typeof a.summary === "object" && a.summary?.when) || "";
+                      const dateB = b.dispatched_at || b.created_at || (typeof b.summary === "object" && b.summary?.when) || "";
+                      return String(dateB).localeCompare(String(dateA));
+                    })
+                    .map(item => {
+
                     const isFading = fadingItemIds.has(item.id);
                     const draft = draftActions[item.id] || { status: "pending", description: "", isDirty: false };
                     const isUploading = uploadingItemIds.has(item.id);

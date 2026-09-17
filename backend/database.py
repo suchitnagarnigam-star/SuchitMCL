@@ -867,10 +867,21 @@ def get_officers_with_active_items() -> List[Dict[str, Any]]:
     for o in all_officers:
         o_id = o["id"]
         if o_id in officer_active_counts:
+            items = officer_active_counts[o_id]
+            # Sort latest news first by dispatched_at, created_at, or summary.when
+            items.sort(
+                key=lambda x: (
+                    str(x.get("dispatched_at") or ""),
+                    str(x.get("created_at") or ""),
+                    str((x.get("summary") or {}).get("when") if isinstance(x.get("summary"), dict) else "")
+                ),
+                reverse=True
+            )
             officer_details = dict(o)
-            officer_details["active_items"] = officer_active_counts[o_id]
-            officer_details["active_count"] = len(officer_active_counts[o_id])
+            officer_details["active_items"] = items
+            officer_details["active_count"] = len(items)
             active_officers_list.append(officer_details)
+
 
     return active_officers_list
 
