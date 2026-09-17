@@ -4,8 +4,11 @@ import React, { useState, useMemo, useEffect } from "react";
 import { 
   X, Printer, Download, FileSpreadsheet, FileText, 
   Calendar, User, Filter, CheckCircle2, Building2, 
-  RefreshCw, ChevronDown, ExternalLink
+  RefreshCw, ChevronDown, ExternalLink, Archive, FolderArchive
 } from "lucide-react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import JSZip from "jszip";
 
 interface OfficerReportModalProps {
   isOpen: boolean;
@@ -40,6 +43,137 @@ interface DispatchRecord {
   };
 }
 
+// Generate standardized naming convention: e.g. "Sh. Vineet Kumar JC A 2026-09-17.pdf"
+export function getOfficerPdfFileName(officer: any, dateStr: string): string {
+  let name = (officer?.full_name || "Officer").trim();
+  if (!name.startsWith("Sh.") && !name.startsWith("Dr.") && !name.startsWith("Smt.")) {
+    name = `Sh. ${name}`;
+  }
+  
+  // Clean short code: "JC (A)" -> "JC A", "JC (V)" -> "JC V", "SE (O&M)" -> "SE OM"
+  const rawCode = (officer?.short_code || officer?.designation || "")
+    .replace(/[()]/g, "")
+    .replace(/&/g, "")
+    .replace(/\//g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+    
+  const dateClean = (dateStr || new Date().toISOString().slice(0, 10)).trim();
+  
+  if (rawCode) {
+    return `${name} ${rawCode} ${dateClean}.pdf`;
+  }
+  return `${name} ${dateClean}.pdf`;
+}
+
+// Builds a standalone vector jsPDF document for a single officer
+export function generateSingleOfficerPdf(group: { officer: any; items: any[] }, dateStr: string): jsPDF {
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  const off = group.officer;
+  const cleanCode = (off?.short_code || "").replace(/[()]/g, "").replace(/&/g, "").replace(/\//g, " ").replace(/\s+/g, " ").trim();
+  
+  const dateDisplay = dateStr === "all"
+    ? "All-Time Active Grievances"
+    : new Date(dateStr + "T00:00:00").toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      });
+
+  // Top header accent line
+  doc.setFillColor(10, 37, 64); // Navy #0A2540
+  doc.rect(40, 25, 762, 3, "F");
+
+  // Title: Municipal Corporation Ludhiana
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(10, 37, 64);
+  doc.text("MUNICIPAL CORPORATION LUDHIANA", 40, 44);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(217, 119, 6); // Amber
+  doc.text("COMMISSIONER'S GRIEVANCE MONITORING & DISPATCH CELL", 40, 56);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text(`Report Date: ${dateDisplay}`, 802, 44, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Generated: ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} IST`, 802, 56, { align: "right" });
+
+  // Officer Banner Box
+  doc.setFillColor(241, 245, 249); // Slate-100
+  doc.rect(40, 66, 762, 32, "F");
+  doc.setFillColor(10, 37, 64);
+  doc.rect(40, 66, 4, 32, "F"); // Left accent bar
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(10, 37, 64);
+  doc.text(`Name of officer = ${off.full_name} (${cleanCode || off.short_code || ""})`, 52, 81);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Designation: ${off.designation || "Municipal Officer"}${off.whatsapp_number ? `  •  Contact: ${off.whatsapp_number}` : ""}  •  Assigned Cases: ${group.items.length}`, 52, 92);
+
+  // Table Body Rows
+  const tableData = group.items.map((it: any, idx: number) => [
+    String(idx + 1),
+    it.details.department || "General",
+    it.details.subject || "Civic Grievance",
+    it.details.summary || "Not specified",
+    it.details.senderInfo || "Citizen Complaint",
+    it.details.source || "Press Media"
+  ]);
+
+  autoTable(doc, {
+    startY: 104,
+    head: [["Sr. no", "Department", "Subject", "Summary", "Sender Information", "Source"]],
+    body: tableData,
+    theme: "grid",
+    headStyles: {
+      fillColor: [10, 37, 64],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 8.5,
+      halign: "left",
+      cellPadding: 5
+    },
+    columnStyles: {
+      0: { cellWidth: 35, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 100, fontSize: 8 },
+      2: { cellWidth: 155, fontSize: 8.5, fontStyle: "bold" },
+      // Column 3 (Summary) uses auto distribution
+      4: { cellWidth: 130, fontSize: 7.5 },
+      5: { cellWidth: 85, fontSize: 8 }
+    },
+    styles: {
+      fontSize: 8,
+      cellPadding: 5,
+      overflow: "linebreak",
+      lineColor: [203, 213, 225],
+      lineWidth: 0.5
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252]
+    },
+    margin: { left: 40, right: 40, top: 40, bottom: 35 },
+    didDrawPage: () => {
+      const pageCount = doc.getNumberOfPages();
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text("Confidential • Municipal Corporation Ludhiana • Suchit MCL Grievance Platform", 40, 580);
+      doc.text(`Page ${pageCount}`, 762, 580, { align: "right" });
+    }
+  });
+
+  return doc;
+}
+
 export default function OfficerReportModal({
   isOpen,
   onClose,
@@ -47,6 +181,7 @@ export default function OfficerReportModal({
 }: OfficerReportModalProps) {
   const [dispatches, setDispatches] = useState<DispatchRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   const [error, setError] = useState("");
   
   // Date and filter controls
@@ -200,7 +335,58 @@ export default function OfficerReportModal({
     return groupedByOfficer.reduce((acc, curr) => acc + curr.items.length, 0);
   }, [groupedByOfficer]);
 
-  // --- EXPORT 1: PRINT / PDF ---
+  // --- ACTION: DOWNLOAD A SINGLE OFFICER'S PDF ---
+  const handleDownloadSinglePdf = (group: { officer: any; items: any[] }) => {
+    try {
+      const dateStr = dateScope === "all" ? "all" : selectedDate;
+      const doc = generateSingleOfficerPdf(group, dateStr);
+      const fileName = getOfficerPdfFileName(group.officer, dateStr);
+      doc.save(fileName);
+    } catch (err) {
+      console.error("Failed to generate PDF for officer:", err);
+      alert("Failed to generate PDF. Please check console for details.");
+    }
+  };
+
+  // --- ACTION: DOWNLOAD ALL INDIVIDUAL OFFICERS' PDFS AT ONCE (ZIP) ---
+  const handleDownloadAllPdfsZip = async () => {
+    if (groupedByOfficer.length === 0) {
+      alert("No officer records found to export for the selected date.");
+      return;
+    }
+
+    setDownloadingZip(true);
+    try {
+      const zip = new JSZip();
+      const dateStr = dateScope === "all" ? "all" : selectedDate;
+
+      // Generate a distinct PDF for every officer
+      for (const group of groupedByOfficer) {
+        const doc = generateSingleOfficerPdf(group, dateStr);
+        const pdfArrayBuffer = doc.output("arraybuffer");
+        const fileName = getOfficerPdfFileName(group.officer, dateStr);
+        zip.file(fileName, pdfArrayBuffer);
+      }
+
+      // Generate the ZIP file
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `MCL_Individual_Officer_PDFs_${dateStr}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to create ZIP of officer PDFs:", err);
+      alert("Error generating ZIP package of officer PDFs.");
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
+
+  // --- ACTION: PRINT / BROWSER PDF (FIXED LAYOUT WITH NO LARGE EMPTY SPACES) ---
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
@@ -219,51 +405,50 @@ export default function OfficerReportModal({
     let officersHtml = "";
     if (groupedByOfficer.length === 0) {
       officersHtml = `
-        <div style="text-align:center; padding:50px 20px; color:#64748b; font-family:Arial, sans-serif;">
+        <div style="text-align:center; padding:40px 20px; color:#64748b; font-family:Arial, sans-serif;">
           <h3>No grievances dispatched for ${dateDisplay}.</h3>
-          <p>Please select another date or choose 'All Active Dispatches'.</p>
         </div>
       `;
     } else {
-      groupedByOfficer.forEach(group => {
+      groupedByOfficer.forEach((group, gIdx) => {
         const off = group.officer;
         const rows = group.items.map((item, idx) => `
-          <tr>
-            <td style="border:1px solid #cbd5e1; padding:8px; text-align:center; font-weight:bold; width:45px;">${idx + 1}</td>
-            <td style="border:1px solid #cbd5e1; padding:8px; font-weight:600; font-size:11px; width:130px;">${item.details.department}</td>
-            <td style="border:1px solid #cbd5e1; padding:8px; font-weight:700; font-size:11.5px; width:220px; color:#0f172a;">${item.details.subject}</td>
-            <td style="border:1px solid #cbd5e1; padding:8px; font-size:11px; line-height:1.45; color:#334155;">${item.details.summary}</td>
-            <td style="border:1px solid #cbd5e1; padding:8px; font-size:10.5px; width:160px; color:#475569;">${item.details.senderInfo}</td>
-            <td style="border:1px solid #cbd5e1; padding:8px; font-size:10.5px; width:120px; font-weight:600; color:#0369a1;">${item.details.source}</td>
+          <tr style="page-break-inside: avoid;">
+            <td style="border:1px solid #cbd5e1; padding:6px; text-align:center; font-weight:bold; width:35px;">${idx + 1}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; font-size:10.5px; width:120px;">${item.details.department}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:700; font-size:11px; width:180px; color:#0f172a;">${item.details.subject}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10.5px; line-height:1.4; color:#334155;">${item.details.summary}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10px; width:140px; color:#475569;">${item.details.senderInfo}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10px; width:100px; font-weight:600; color:#0369a1;">${item.details.source}</td>
           </tr>
         `).join("");
 
         officersHtml += `
-          <div class="officer-section" style="page-break-inside: avoid; margin-bottom: 28px;">
-            <div style="background-color: #f1f5f9; border-left: 6px solid #0a2540; padding: 10px 14px; margin-bottom: 8px; border-radius: 4px; display:flex; justify-content:space-between; align-items:center;">
+          <div class="officer-block" style="margin-bottom: 22px; page-break-after: auto;">
+            <div class="officer-header-banner" style="page-break-after: avoid; background-color: #f1f5f9; border-left: 5px solid #0a2540; padding: 7px 12px; margin-bottom: 6px; border-radius: 3px; display:flex; justify-content:space-between; align-items:center;">
               <div>
-                <h2 style="margin: 0; font-size: 15px; color: #0a2540; font-weight: 800;">
+                <h3 style="margin: 0; font-size: 13.5px; color: #0a2540; font-weight: 800;">
                   Name of officer = ${off.full_name} (${off.short_code})
-                </h2>
-                <div style="font-size: 11px; color: #475569; margin-top: 2px;">
+                </h3>
+                <div style="font-size: 10.5px; color: #475569; margin-top: 1px;">
                   Designation: <strong>${off.designation || "Assigned Officer"}</strong>
                   ${off.whatsapp_number ? ` &bull; Contact: ${off.whatsapp_number}` : ""}
                 </div>
               </div>
-              <div style="background: #0a2540; color: #ffffff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold;">
+              <div style="background: #0a2540; color: #ffffff; padding: 3px 9px; border-radius: 10px; font-size: 10.5px; font-weight: bold;">
                 ${group.items.length} Grievance${group.items.length === 1 ? "" : "s"}
               </div>
             </div>
 
-            <table style="width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; margin-bottom: 12px;">
+            <table style="width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 10.5px; margin-bottom: 8px;">
               <thead>
-                <tr style="background-color: #0a2540; color: #ffffff;">
-                  <th style="border:1px solid #0a2540; padding:8px; text-align:center;">Sr. no</th>
-                  <th style="border:1px solid #0a2540; padding:8px; text-align:left;">Department</th>
-                  <th style="border:1px solid #0a2540; padding:8px; text-align:left;">Subject</th>
-                  <th style="border:1px solid #0a2540; padding:8px; text-align:left;">Summary</th>
-                  <th style="border:1px solid #0a2540; padding:8px; text-align:left;">Sender Information</th>
-                  <th style="border:1px solid #0a2540; padding:8px; text-align:left;">Source</th>
+                <tr style="background-color: #0a2540; color: #ffffff; page-break-inside: avoid;">
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:center;">Sr. no</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Department</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Subject</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Summary</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Sender Information</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Source</th>
                 </tr>
               </thead>
               <tbody>
@@ -283,32 +468,35 @@ export default function OfficerReportModal({
         <style>
           @page {
             size: A4 landscape;
-            margin: 12mm;
+            margin: 10mm 12mm;
+          }
+          * {
+            box-sizing: border-box;
           }
           body {
             font-family: Arial, Helvetica, sans-serif;
             color: #0f172a;
             margin: 0;
-            padding: 10px;
+            padding: 8px;
             background: #fff;
           }
           .header-box {
             text-align: center;
             border-bottom: 2px solid #0a2540;
-            padding-bottom: 12px;
-            margin-bottom: 18px;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
           }
           .header-box h1 {
             margin: 0;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 900;
             color: #0a2540;
             text-transform: uppercase;
             letter-spacing: 0.5px;
           }
           .header-box p {
-            margin: 3px 0 0 0;
-            font-size: 11.5px;
+            margin: 2px 0 0 0;
+            font-size: 10.5px;
             color: #475569;
           }
           .meta-bar {
@@ -316,32 +504,47 @@ export default function OfficerReportModal({
             justify-content: space-between;
             background: #f8fafc;
             border: 1px solid #e2e8f0;
-            padding: 8px 12px;
-            font-size: 11px;
+            padding: 6px 10px;
+            font-size: 10.5px;
             font-weight: bold;
             color: #334155;
-            margin-bottom: 18px;
+            margin-bottom: 12px;
             border-radius: 4px;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+          .officer-header-banner {
+            page-break-after: avoid;
           }
           @media print {
             .no-print { display: none !important; }
             body { padding: 0; }
-            .officer-section { page-break-after: auto; }
           }
         </style>
       </head>
       <body>
-        <div class="no-print" style="margin-bottom:15px; display:flex; gap:10px; justify-content:flex-end;">
-          <button onclick="window.print()" style="background:#0a2540; color:#fff; border:none; padding:8px 16px; border-radius:4px; font-weight:bold; cursor:pointer;">
+        <div class="no-print" style="margin-bottom:12px; display:flex; gap:10px; justify-content:flex-end;">
+          <button onclick="window.print()" style="background:#0a2540; color:#fff; border:none; padding:7px 16px; border-radius:4px; font-weight:bold; cursor:pointer;">
             🖨️ Print / Save as PDF
           </button>
-          <button onclick="window.close()" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; padding:8px 16px; border-radius:4px; font-weight:bold; cursor:pointer;">
+          <button onclick="window.close()" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; padding:7px 16px; border-radius:4px; font-weight:bold; cursor:pointer;">
             Close
           </button>
         </div>
 
         <div class="header-box">
-          <div style="font-size: 10px; font-weight: 800; color: #d97706; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">
+          <div style="font-size: 9.5px; font-weight: 800; color: #d97706; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">
             Municipal Corporation Ludhiana &bull; Commissioner's Grievance Monitoring Cell
           </div>
           <h1>Officer-Wise Daily Grievance Action Report</h1>
@@ -352,12 +555,12 @@ export default function OfficerReportModal({
           <span>📅 <strong>Report Date:</strong> ${dateDisplay}</span>
           <span>🏛️ <strong>Total Officers with Tasks:</strong> ${groupedByOfficer.length}</span>
           <span>📋 <strong>Total Grievances:</strong> ${totalReportItems}</span>
-          <span>⏰ <strong>Generated:</strong> ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</span>
+          <span>⏰ <strong>Generated:</strong> ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })} IST</span>
         </div>
 
         ${officersHtml}
 
-        <div style="margin-top: 30px; border-top: 1px solid #cbd5e1; padding-top: 8px; font-size: 9.5px; color: #64748b; text-align: center;">
+        <div style="margin-top: 20px; border-top: 1px solid #cbd5e1; padding-top: 6px; font-size: 9px; color: #64748b; text-align: center;">
           Confidential &bull; Municipal Corporation Ludhiana &bull; Suchit Nagar Nigam Intelligence Platform
         </div>
       </body>
@@ -369,7 +572,7 @@ export default function OfficerReportModal({
     printWindow.document.close();
   };
 
-  // --- EXPORT 2: CSV SPREADSHEET ---
+  // --- ACTION: CSV SPREADSHEET ---
   const handleDownloadCSV = () => {
     if (groupedByOfficer.length === 0) {
       alert("No grievances found to export for the selected date.");
@@ -397,7 +600,7 @@ export default function OfficerReportModal({
         lines.push([cleanSr, cleanDept, cleanSubj, cleanSumm, cleanSender, cleanSource].join(","));
       });
 
-      lines.push(""); // Blank line between officers
+      lines.push("");
     });
 
     const csvContent = "\uFEFF" + lines.join("\r\n");
@@ -412,7 +615,7 @@ export default function OfficerReportModal({
     URL.revokeObjectURL(url);
   };
 
-  // --- EXPORT 3: MICROSOFT WORD (.DOC) ---
+  // --- ACTION: MICROSOFT WORD (.DOC) ---
   const handleDownloadDoc = () => {
     if (groupedByOfficer.length === 0) {
       alert("No grievances found to export for the selected date.");
@@ -436,11 +639,11 @@ export default function OfficerReportModal({
       `).join("");
 
       officerSectionsHtml += `
-        <div style="margin-top:20px; margin-bottom:15px;">
-          <h3 style="background:#0a2540; color:#ffffff; padding:8px 12px; margin:0 0 5px 0; font-size:14px;">
+        <div style="margin-top:16px; margin-bottom:12px;">
+          <h3 style="background:#0a2540; color:#ffffff; padding:7px 10px; margin:0 0 4px 0; font-size:13px;">
             Name of officer = ${off.full_name} (${off.short_code}) &mdash; ${off.designation || "Assigned Officer"}
           </h3>
-          <table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif; font-size:11px;" border="1">
+          <table style="width:100%; border-collapse:collapse; font-family:Arial, sans-serif; font-size:10.5px;" border="1">
             <thead>
               <tr style="background:#f1f5f9; color:#0a2540;">
                 <th style="border:1px solid #94a3b8; padding:6px; width:45px;">Sr. no</th>
@@ -466,10 +669,10 @@ export default function OfficerReportModal({
         <title>Officer Grievance Report</title>
       </head>
       <body style="font-family: Arial, sans-serif; padding: 20px;">
-        <h1 style="color:#0a2540; text-align:center; margin-bottom:4px;">Municipal Corporation Ludhiana</h1>
-        <h2 style="color:#64748b; text-align:center; font-size:14px; margin-top:0;">Daily Officer Grievance Redressal Report</h2>
-        <p style="text-align:center; font-size:12px; color:#334155;"><strong>Date:</strong> ${dateDisplay} &bull; <strong>Total Grievances:</strong> ${totalReportItems}</p>
-        <hr style="border:1px solid #0a2540; margin-bottom:20px;">
+        <h1 style="color:#0a2540; text-align:center; margin-bottom:4px; font-size:18px;">Municipal Corporation Ludhiana</h1>
+        <h2 style="color:#64748b; text-align:center; font-size:13px; margin-top:0;">Daily Officer Grievance Redressal Report</h2>
+        <p style="text-align:center; font-size:11px; color:#334155;"><strong>Date:</strong> ${dateDisplay} &bull; <strong>Total Grievances:</strong> ${totalReportItems}</p>
+        <hr style="border:1px solid #0a2540; margin-bottom:15px;">
         ${officerSectionsHtml}
       </body>
       </html>
@@ -490,13 +693,13 @@ export default function OfficerReportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[94vh] flex flex-col border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
-        <div className="bg-[#0A2540] text-white px-6 py-4 flex items-center justify-between shrink-0">
+        <div className="bg-[#0A2540] text-white px-6 py-3.5 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-amber-400">
-              <FileText className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-amber-400">
+              <FileText className="w-4.5 h-4.5" />
             </div>
             <div>
               <h3 className="text-base font-bold tracking-tight">Daily Officer Grievance Redressal Report</h3>
@@ -507,14 +710,14 @@ export default function OfficerReportModal({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Filter Controls Bar */}
-        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div className="bg-slate-50 border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
           
           {/* Date Selector */}
           <div className="flex items-center space-x-2">
@@ -527,25 +730,25 @@ export default function OfficerReportModal({
             <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold shadow-2xs">
               <button
                 onClick={() => handleScopeChange("today")}
-                className={`px-2.5 py-1 rounded-md transition-all ${dateScope === "today" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
+                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${dateScope === "today" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
               >
                 Today
               </button>
               <button
                 onClick={() => handleScopeChange("yesterday")}
-                className={`px-2.5 py-1 rounded-md transition-all ${dateScope === "yesterday" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
+                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${dateScope === "yesterday" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
               >
                 Yesterday
               </button>
               <button
                 onClick={() => setDateScope("custom")}
-                className={`px-2.5 py-1 rounded-md transition-all ${dateScope === "custom" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
+                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${dateScope === "custom" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
               >
                 Custom Date
               </button>
               <button
                 onClick={() => handleScopeChange("all")}
-                className={`px-2.5 py-1 rounded-md transition-all ${dateScope === "all" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
+                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${dateScope === "all" ? "bg-[#0A2540] text-white" : "text-slate-600 hover:text-slate-900"}`}
               >
                 All-Time
               </button>
@@ -557,7 +760,7 @@ export default function OfficerReportModal({
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="text-xs border border-slate-300 rounded-lg px-2.5 py-1 bg-white font-medium focus:ring-1 focus:ring-[#0A2540] focus:outline-none"
+                className="text-xs border border-slate-300 rounded-lg px-2.5 py-1 bg-white font-medium focus:ring-1 focus:ring-[#0A2540] focus:outline-none cursor-pointer"
               />
             )}
           </div>
@@ -571,7 +774,7 @@ export default function OfficerReportModal({
             <select
               value={selectedOfficerId}
               onChange={(e) => setSelectedOfficerId(e.target.value)}
-              className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium focus:ring-1 focus:ring-[#0A2540] focus:outline-none max-w-[220px]"
+              className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-medium focus:ring-1 focus:ring-[#0A2540] focus:outline-none max-w-[220px] cursor-pointer"
             >
               <option value="all">All Officers ({groupedByOfficer.length})</option>
               {allOfficersList.map(o => (
@@ -582,65 +785,83 @@ export default function OfficerReportModal({
             </select>
           </div>
 
-          {/* Export Actions */}
+          {/* Major Export Actions */}
           <div className="flex items-center space-x-2">
+            {/* Download ALL individual officer PDFs at once (ZIP) */}
+            <button
+              onClick={handleDownloadAllPdfsZip}
+              disabled={groupedByOfficer.length === 0 || downloadingZip}
+              className="flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-[#0A2540] px-3.5 py-1.5 rounded-lg text-xs font-black shadow-xs transition-colors cursor-pointer"
+              title="Download all individual officer PDF files at once packed in a ZIP"
+            >
+              {downloadingZip ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FolderArchive className="w-3.5 h-3.5" />
+              )}
+              <span>{downloadingZip ? "Packaging PDFs..." : "Download All Officer PDFs (ZIP)"}</span>
+            </button>
+
+            {/* Print / Clean PDF View */}
             <button
               onClick={handlePrint}
               disabled={groupedByOfficer.length === 0}
-              className="flex items-center space-x-1.5 bg-[#0A2540] hover:bg-slate-850 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-              title="Print official report or save directly as PDF"
+              className="flex items-center space-x-1.5 bg-[#0A2540] hover:bg-slate-850 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              title="Print consolidated report or save as PDF"
             >
               <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span>Print / PDF</span>
+              <span>Print / Combined PDF</span>
             </button>
 
+            {/* Excel CSV */}
             <button
               onClick={handleDownloadCSV}
               disabled={groupedByOfficer.length === 0}
-              className="flex items-center space-x-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              className="flex items-center space-x-1.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
               title="Download structured CSV spreadsheet"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Excel (CSV)</span>
+              <span>CSV</span>
             </button>
 
+            {/* Word DOC */}
             <button
               onClick={handleDownloadDoc}
               disabled={groupedByOfficer.length === 0}
-              className="flex items-center space-x-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              className="flex items-center space-x-1.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
               title="Download Microsoft Word document"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Word (.doc)</span>
+              <span>Word</span>
             </button>
           </div>
         </div>
 
         {/* Live Preview Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-100/70 space-y-6">
+        <div className="flex-1 overflow-y-auto p-5 bg-slate-100/70 space-y-5">
           
           {/* Summary Strip */}
-          <div className="bg-white border border-slate-200 rounded-xl p-3.5 flex items-center justify-between shadow-2xs">
+          <div className="bg-white border border-slate-200 rounded-xl p-3 flex items-center justify-between shadow-2xs">
             <div className="flex items-center space-x-4 text-xs">
               <div>
-                <span className="text-slate-400 font-bold block text-[10px] uppercase">Selected Date</span>
+                <span className="text-slate-400 font-bold block text-[10px] uppercase">Report Date</span>
                 <span className="font-bold text-slate-800">
                   {dateScope === "all" ? "All Time" : selectedDate}
                 </span>
               </div>
               <div className="border-l border-slate-200 pl-4">
-                <span className="text-slate-400 font-bold block text-[10px] uppercase">Active Officers</span>
+                <span className="text-slate-400 font-bold block text-[10px] uppercase">Officers with Tasks</span>
                 <span className="font-bold text-slate-800">{groupedByOfficer.length} Officers</span>
               </div>
               <div className="border-l border-slate-200 pl-4">
-                <span className="text-slate-400 font-bold block text-[10px] uppercase">Dispatched Cases</span>
+                <span className="text-slate-400 font-bold block text-[10px] uppercase">Total Grievances</span>
                 <span className="font-bold text-red-600">{totalReportItems} Grievances</span>
               </div>
             </div>
 
-            <span className="text-[11px] text-slate-500 italic">
-              Live Preview of Downloadable Document
-            </span>
+            <div className="text-[11px] text-slate-500 font-medium">
+              💡 Click <strong className="text-[#0A2540]">&apos;Download All Officer PDFs (ZIP)&apos;</strong> to get all individual files, or download an officer&apos;s PDF below.
+            </div>
           </div>
 
           {loading ? (
@@ -663,11 +884,13 @@ export default function OfficerReportModal({
           ) : (
             groupedByOfficer.map((group, gIdx) => {
               const off = group.officer;
+              const officerFileName = getOfficerPdfFileName(off, dateScope === "all" ? "all" : selectedDate);
+
               return (
                 <div key={off.id || gIdx} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
                   
                   {/* Officer Title Banner */}
-                  <div className="bg-slate-50 border-b border-slate-200 p-3.5 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-[#0A2540]">
+                  <div className="bg-slate-50 border-b border-slate-200 p-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-l-4 border-l-[#0A2540]">
                     <div>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs font-black text-[#0A2540] uppercase tracking-wide">
@@ -682,9 +905,21 @@ export default function OfficerReportModal({
                       </p>
                     </div>
 
-                    <span className="text-xs font-bold bg-[#0A2540] text-white px-2.5 py-1 rounded-full self-start sm:self-auto">
-                      {group.items.length} Grievance{group.items.length === 1 ? "" : "s"}
-                    </span>
+                    <div className="flex items-center space-x-2.5 self-start sm:self-auto">
+                      <span className="text-xs font-bold bg-[#0A2540] text-white px-2.5 py-1 rounded-full">
+                        {group.items.length} Grievance{group.items.length === 1 ? "" : "s"}
+                      </span>
+
+                      {/* Download Single Officer's PDF */}
+                      <button
+                        onClick={() => handleDownloadSinglePdf(group)}
+                        className="flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-[#0A2540] border border-slate-300 hover:border-[#0A2540] px-3 py-1 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                        title={`Download PDF as "${officerFileName}"`}
+                      >
+                        <Download className="w-3.5 h-3.5 text-red-600" />
+                        <span>Download PDF</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Tabular Form */}
@@ -753,13 +988,13 @@ export default function OfficerReportModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 flex items-center justify-between shrink-0">
+        <div className="bg-slate-50 border-t border-slate-200 px-6 py-2.5 flex items-center justify-between shrink-0">
           <span className="text-xs text-slate-500 font-medium">
             Ready to export <strong>{totalReportItems}</strong> cases across <strong>{groupedByOfficer.length}</strong> officers.
           </span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs transition-colors"
+            className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs transition-colors cursor-pointer"
           >
             Close
           </button>
