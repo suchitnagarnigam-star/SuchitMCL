@@ -8,6 +8,8 @@ import OverviewTab from "@/components/overview-tab";
 import MappingTab from "@/components/mapping-tab";
 import ResolvedTab from "@/components/resolved-tab";
 import DispatchedTab from "@/components/dispatched-tab";
+import HeatmapTab from "@/components/heatmap-tab";
+import SentimentTab from "@/components/sentiment-tab";
 import GovTopHeader from "@/components/gov-header";
 
 interface Officer {
@@ -144,6 +146,7 @@ export default function Home() {
       
       // Flatten grouped response
       const flatList: Officer[] = [
+        ...(data.additional_commissioner || []),
         ...(data.joint_commissioner || []),
         ...(data.zonal_commissioner || []),
         ...(data.superintending_engineer || [])
@@ -189,6 +192,8 @@ export default function Home() {
               <h2 className="text-lg md:text-xl font-black text-slate-800 tracking-tight leading-none mt-1">
                 {activeTab === "overview" && "Executive Overview Dashboard"}
                 {activeTab === "desk" && "Commissioner's Action Desk"}
+                {activeTab === "heatmap" && "GIS Ward Choropleth & Diagnostics"}
+                {activeTab === "sentiment" && "AI Media Sentiment & District Mood Radar"}
                 {activeTab === "mapping" && "Department & Officer Mapping Panel"}
                 {activeTab === "dispatched" && "Dispatched Intelligence Log"}
                 {activeTab === "resolved" && "Transparency & Resolution Register"}
@@ -220,6 +225,14 @@ export default function Home() {
 
             {activeTab === "desk" && (
               <DeskTab officers={officers} />
+            )}
+
+            {activeTab === "heatmap" && (
+              <HeatmapTab />
+            )}
+
+            {activeTab === "sentiment" && (
+              <SentimentTab />
             )}
             
             {activeTab === "mapping" && (

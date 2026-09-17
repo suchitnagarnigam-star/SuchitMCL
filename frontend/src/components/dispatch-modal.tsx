@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, ChevronRight, ChevronLeft, Send, CheckCircle2, Clipboard } from "lucide-react";
+import { formatPersonName } from "@/lib/formatters";
 
 interface Officer {
   id: string;
@@ -22,6 +23,7 @@ interface NewsItem {
   severity: string;
   summary: string | any;
   page_number: number;
+  source_type?: string;
   suggested_officer?: Officer | null;
 }
 
@@ -117,6 +119,7 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
     );
   };
 
+  const additionalCommissioners = officers.filter(o => o.officer_type === "additional_commissioner");
   const jointCommissioners = officers.filter(o => o.officer_type === "joint_commissioner");
   const zonalCommissioners = officers.filter(o => o.officer_type === "zonal_commissioner");
   const superintendingEngineers = officers.filter(o => o.officer_type === "superintending_engineer");
@@ -173,10 +176,16 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
           <div className="flex-1 bg-[#046A38]" />
         </div>
 
-        {/* Modal Header */}
         <div className="px-6 py-4 bg-[#0A2540] text-white flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-xs font-black uppercase tracking-wider text-amber-400">Dispatch Registry Panel</h2>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-xs font-black uppercase tracking-wider text-amber-400">Dispatch Registry Panel</h2>
+              {(newsItem.source_type === "daak" || (newsItem.publication && newsItem.publication.toLowerCase().startsWith("daak"))) && (
+                <span className="bg-purple-500/20 text-purple-300 border border-purple-400/30 text-[9px] font-black px-1.5 py-0.5 rounded">
+                  📬 Citizen Daak
+                </span>
+              )}
+            </div>
             <p className="text-[10px] text-slate-350 truncate max-w-xs mt-0.5">{newsItem.headline}</p>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition-colors">
@@ -242,6 +251,42 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
               </label>
               
               <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+                {/* Additional Commissioner */}
+                {additionalCommissioners.length > 0 && (
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase tracking-wider text-[#0A2540] mb-2">Additional Commissioner</h4>
+                    <div className="grid grid-cols-1 gap-2">
+                      {additionalCommissioners.map(o => (
+                        <label
+                          key={o.id}
+                          className={`flex items-center justify-between p-3 rounded-lg border text-xs cursor-pointer transition-all duration-150 ${
+                            selectedOfficerIds.includes(o.id)
+                              ? "border-[#0A2540] bg-[#0A2540]/5 text-[#0A2540] font-semibold"
+                              : "border-slate-200 bg-white text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedOfficerIds.includes(o.id)}
+                              onChange={() => handleToggleOfficer(o.id)}
+                              className="text-[#0A2540] focus:ring-[#0A2540] accent-[#0A2540] rounded border-slate-300"
+                            />
+                            <div>
+                              <span className="font-bold text-slate-800">{o.short_code}</span>
+                              <span className="mx-2 text-slate-350">•</span>
+                              <span>{formatPersonName(o.full_name)}</span>
+                            </div>
+                          </div>
+                          {DEFAULT_SUGGESTION_MAP[department] === o.short_code && (
+                            <span className="text-[9px] bg-amber-500 text-[#0A2540] font-black uppercase px-1.5 py-0.5 rounded">Suggested</span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Joint Commissioners */}
                 <div>
                   <h4 className="text-[10px] font-black uppercase tracking-wider text-[#0A2540] mb-2">Joint Commissioners</h4>
@@ -265,7 +310,7 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
                           <div>
                             <span className="font-bold text-slate-800">{o.short_code}</span>
                             <span className="mx-2 text-slate-350">•</span>
-                            <span>{o.full_name}</span>
+                            <span>{formatPersonName(o.full_name)}</span>
                           </div>
                         </div>
                         {DEFAULT_SUGGESTION_MAP[department] === o.short_code && (
@@ -332,7 +377,7 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
                             className="text-[#0A2540] focus:ring-[#0A2540] accent-[#0A2540] rounded border-slate-300"
                           />
                           <div>
-                            <span className="font-bold text-slate-800">{o.full_name}</span>
+                            <span className="font-bold text-slate-800">{formatPersonName(o.full_name)}</span>
                             <span className="mx-2 text-slate-350">•</span>
                             <span className="text-[11px] font-medium text-slate-500">{o.designation} ({o.short_code})</span>
                           </div>
@@ -348,16 +393,16 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
             </div>
           )}
 
-          {/* STEP 3: Remarks */}
+          {/* STEP 3: Suggested Next Steps / Remarks */}
           {step === 3 && (
             <div className="space-y-4">
               <label className="block text-xs font-bold text-slate-700">
-                Step 3: Add Commissioner's Remarks (Optional)
+                Step 3: Suggested Next Steps / Action Remarks (Optional)
               </label>
               <textarea
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Add specific instructions, target deadlines, or details here..."
+                placeholder="Review or edit the suggested next steps, deadlines, or instructions..."
                 rows={4}
                 className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 text-slate-800 focus:outline-none focus:border-[#0A2540] text-xs placeholder:text-slate-400 font-semibold"
               />
@@ -370,7 +415,7 @@ export default function DispatchModal({ newsItem, officers, onClose, onDispatchS
                       if (!officer) return null;
                       return (
                         <div key={oid} className="py-1.5 first:pt-0">
-                          <p className="font-bold text-slate-800">{officer.full_name} ({officer.short_code})</p>
+                          <p className="font-bold text-slate-800">{formatPersonName(officer.full_name)} ({officer.short_code})</p>
                           <p className="text-slate-500 font-medium">{officer.designation} • {officer.whatsapp_number || "No WhatsApp number"}</p>
                         </div>
                       );

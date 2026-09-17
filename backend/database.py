@@ -23,21 +23,46 @@ mock_db = {
     "evidence": {} # news_item_id -> list of evidence
 }
 
+def format_person_name_with_sh(name: Optional[str]) -> str:
+    """
+    Ensures that personal names are prefixed with 'Sh.' (e.g. 'Sh. Shyam Lal Gupta', 'Sh. Ranjit Singh').
+    Leaves institutional/post titles like 'Additional Commissioner' and 'Zonal Commissioner A' intact.
+    """
+    if not name:
+        return ""
+    name_str = str(name).strip()
+    if not name_str:
+        return ""
+    lower = name_str.lower()
+    if lower.startswith("sh.") or lower.startswith("sh ") or lower.startswith("shri ") or lower.startswith("smt.") or lower.startswith("smt "):
+        return name_str
+    
+    non_person_roles = [
+        "additional commissioner", "commissioner", "zonal commissioner",
+        "joint commissioner", "superintending engineer", "municipal town planner", "mcl"
+    ]
+    if any(lower.startswith(role) for role in non_person_roles):
+        return name_str
+    
+    return f"Sh. {name_str}"
+
 # Helper to load seed data into mock database if needed
 def seed_mock_db():
     officers = [
-        {"id": "o1", "short_code": "JC (V)", "full_name": "Vineet Kumar", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
-        {"id": "o2", "short_code": "JC (A)", "full_name": "Amanpreet Singh", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
-        {"id": "o3", "short_code": "JC (T)", "full_name": "Tapan Bhanot", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
+        {"id": "o0", "short_code": "Addl. Commissioner", "full_name": "Additional Commissioner", "designation": "Additional Commissioner", "officer_type": "additional_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
+        {"id": "o1", "short_code": "JC (V)", "full_name": "Sh. Vineet Kumar", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
+        {"id": "o2", "short_code": "JC (A)", "full_name": "Sh. Amanpreet Singh", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
+        {"id": "o3", "short_code": "JC (T)", "full_name": "Sh. Tapan Bhanot", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
         {"id": "o4", "short_code": "Zonal (A)", "full_name": "Zonal Commissioner A", "designation": "Zonal Commissioner", "officer_type": "zonal_commissioner", "zone": "A", "department": None, "whatsapp_number": "", "is_active": True},
         {"id": "o5", "short_code": "Zonal (B)", "full_name": "Zonal Commissioner B", "designation": "Zonal Commissioner", "officer_type": "zonal_commissioner", "zone": "B", "department": None, "whatsapp_number": "", "is_active": True},
         {"id": "o6", "short_code": "Zonal (C)", "full_name": "Zonal Commissioner C", "designation": "Zonal Commissioner", "officer_type": "zonal_commissioner", "zone": "C", "department": None, "whatsapp_number": "", "is_active": True},
         {"id": "o7", "short_code": "Zonal (D)", "full_name": "Zonal Commissioner D", "designation": "Zonal Commissioner", "officer_type": "zonal_commissioner", "zone": "D", "department": None, "whatsapp_number": "", "is_active": True},
-        {"id": "o8", "short_code": "SE (O&M)", "full_name": "Ekjot Singh", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": "Operations & Maintenance (O&M)", "whatsapp_number": "", "is_active": True},
-        {"id": "o9", "short_code": "SE (B&R)", "full_name": "Parveen Singla", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": "Bridges & Roads (B&R)", "whatsapp_number": "", "is_active": True},
-        {"id": "o10", "short_code": "MTP", "full_name": "Ranjit Singh", "designation": "Municipal Town Planner", "officer_type": "superintending_engineer", "zone": None, "department": "Town Planning (Building Branch)", "whatsapp_number": "", "is_active": True},
-        {"id": "o11", "short_code": "SE (SLG)", "full_name": "Shyam Lal Gupta", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
-        {"id": "o12", "short_code": "SE (HPS)", "full_name": "Harkiranpal Singh", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": None, "whatsapp_number": "", "is_active": True}
+        {"id": "o8", "short_code": "SE (O&M)", "full_name": "Sh. Ekjot Singh", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": "Operations & Maintenance (O&M)", "whatsapp_number": "", "is_active": True},
+        {"id": "o9", "short_code": "SE (B&R)", "full_name": "Sh. Parveen Singla", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": "Bridges & Roads (B&R)", "whatsapp_number": "", "is_active": True},
+        {"id": "o10", "short_code": "MTP", "full_name": "Sh. Vijay Kumar", "designation": "Municipal Town Planner", "officer_type": "superintending_engineer", "zone": None, "department": "Town Planning (Building Branch)", "whatsapp_number": "", "is_active": True},
+        {"id": "o11", "short_code": "SE (SLG)", "full_name": "Sh. Shyam Lal Gupta", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
+        {"id": "o12", "short_code": "SE (HPS)", "full_name": "Sh. Harkiranpal Singh", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
+        {"id": "o13", "short_code": "SE (RS)", "full_name": "Sh. Ranjit Singh", "designation": "Superintending Engineer", "officer_type": "superintending_engineer", "zone": None, "department": None, "whatsapp_number": "", "is_active": True}
     ]
     for o in officers:
         mock_db["officers"][o["id"]] = o
@@ -143,18 +168,43 @@ def get_pdf_upload(upload_id: str) -> Optional[Dict[str, Any]]:
 
 # --- OFFICERS ---
 def get_officers() -> List[Dict[str, Any]]:
+    officers_list = []
     if supabase:
         try:
             res = supabase.table("mcl_officers").select("*").execute()
             if res.data:
-                return res.data
+                data = list(res.data)
+                has_addl = any(o.get("officer_type") == "additional_commissioner" or o.get("short_code") == "Addl. Commissioner" for o in data)
+                if not has_addl:
+                    data.insert(0, {
+                        "id": "o0_addl_comm",
+                        "short_code": "Addl. Commissioner",
+                        "full_name": "Additional Commissioner",
+                        "designation": "Additional Commissioner",
+                        "officer_type": "additional_commissioner",
+                        "zone": None,
+                        "department": None,
+                        "whatsapp_number": "",
+                        "is_active": True
+                    })
+                officers_list = data
         except Exception as e:
             print(f"DB Error get_officers: {e}")
     
-    # Fallback
-    return list(mock_db["officers"].values())
+    if not officers_list:
+        # Fallback
+        officers_list = list(mock_db["officers"].values())
+
+    # Guarantee all person names have 'Sh.' prefix
+    for o in officers_list:
+        if "full_name" in o and o["full_name"]:
+            o["full_name"] = format_person_name_with_sh(o["full_name"])
+
+    return officers_list
 
 def create_officer(officer: Dict[str, Any]) -> Dict[str, Any]:
+    if "full_name" in officer and officer["full_name"]:
+        officer["full_name"] = format_person_name_with_sh(officer["full_name"])
     if supabase:
         try:
             res = supabase.table("mcl_officers").insert(officer).execute()
@@ -171,6 +221,8 @@ def create_officer(officer: Dict[str, Any]) -> Dict[str, Any]:
     return officer
 
 def update_officer(officer_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if "full_name" in updates and updates["full_name"]:
+        updates["full_name"] = format_person_name_with_sh(updates["full_name"])
     if supabase:
         try:
             res = supabase.table("mcl_officers").update(updates).eq("id", officer_id).execute()
@@ -259,7 +311,7 @@ def create_news_item(news_item: Dict[str, Any]) -> Dict[str, Any]:
     mock_db["news_items"][uid] = news_item
     return news_item
 
-def get_news_items(date_str: Optional[str] = None, department: Optional[str] = None, severity: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_news_items(date_str: Optional[str] = None, department: Optional[str] = None, severity: Optional[str] = None, status: Optional[str] = None, source_type: Optional[str] = None) -> List[Dict[str, Any]]:
     news_items_list = []
     if supabase:
         try:
@@ -322,6 +374,21 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
     joined_list = []
     for item in news_items_list:
         joined_item = dict(item)
+
+        # Resolve source_type ('media' or 'daak')
+        s_type = item.get("source_type")
+        if not s_type:
+            s_dict = item.get("summary")
+            if isinstance(s_dict, dict):
+                s_type = s_dict.get("source_type")
+        resolved_source = s_type or "media"
+        joined_item["source_type"] = resolved_source
+
+        # Filter by source_type if specified
+        if source_type and source_type.lower() not in ["all", "none", ""]:
+            if resolved_source.lower() != source_type.lower():
+                continue
+
         dept = item.get("department")
         suggested_officer_id = mapping_map.get(dept)
         

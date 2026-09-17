@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, FileSpreadsheet, Search, Calendar, Filter, Clipboard, AlertCircle } from "lucide-react";
 import { DEPT_STYLES } from "./desk-tab";
+import { formatPersonName } from "@/lib/formatters";
 
 interface Officer {
   id: string;
@@ -23,6 +24,7 @@ interface NewsItem {
   severity: string;
   summary: string | any;
   page_number: number;
+  source_type?: string;
 }
 
 interface DispatchRecord {
@@ -135,7 +137,7 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
       `"${d.news_item.department}"`,
       `"${d.news_item.severity}"`,
       d.news_item.page_number,
-      `"${d.officer.full_name} (${d.officer.short_code})"`,
+      `"${formatPersonName(d.officer.full_name)} (${d.officer.short_code})"`,
       `"${d.officer.designation}"`,
       `"${d.officer.whatsapp_number}"`,
       `"${d.dispatched_at}"`,
@@ -192,7 +194,7 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
               <option value="">All Officers</option>
               {officers.map(o => (
                 <option key={o.id} value={o.id}>
-                  {o.short_code} — {o.full_name}
+                  {o.short_code} — {formatPersonName(o.full_name)}
                 </option>
               ))}
             </select>
@@ -303,6 +305,12 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${DEPT_STYLES[record.news_item.department] || "bg-slate-100 text-slate-600 border border-slate-200"}`}>
                         {record.news_item.department}
                       </span>
+                      {/* Daak Badge */}
+                      {(record.news_item.source_type === "daak" || record.news_item.publication?.toLowerCase().startsWith("daak")) && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
+                          📬 Daak
+                        </span>
+                      )}
                       {/* Severity */}
                       <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider font-extrabold ${severityBadge}`}>
                         {record.news_item.severity}
@@ -318,7 +326,7 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
                   <div className="flex items-center space-x-6 text-xs text-slate-500 shrink-0">
                     <div>
                       <span className="block text-[9px] text-slate-400 uppercase font-extrabold">Assigned Officer</span>
-                      <span className="font-black text-[#0A2540]">{record.officer.full_name}</span>
+                      <span className="font-black text-[#0A2540]">{formatPersonName(record.officer.full_name)}</span>
                     </div>
 
                     <div>
@@ -346,7 +354,7 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
 
                       {/* Remarks Section */}
                       <div>
-                        <h5 className="text-[10px] font-bold text-[#0A2540] uppercase tracking-wider mb-1">Commissioner's Remarks</h5>
+                        <h5 className="text-[10px] font-bold text-[#0A2540] uppercase tracking-wider mb-1">Suggested Next Steps / Remarks</h5>
                         <p className="text-xs text-slate-750 leading-relaxed bg-white border border-slate-200 p-3.5 rounded-lg italic">
                           {record.remarks ? record.remarks : "No additional remarks provided."}
                         </p>
@@ -355,7 +363,7 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
                       {/* Officer Details */}
                       <div className="p-3 bg-white border border-slate-200 rounded-lg flex items-center justify-between text-xs">
                         <div>
-                          <p className="font-bold text-slate-800">{record.officer.full_name}</p>
+                          <p className="font-bold text-slate-800">{formatPersonName(record.officer.full_name)}</p>
                           <p className="text-slate-500 font-medium">{record.officer.designation}</p>
                         </div>
                         <div className="text-right">

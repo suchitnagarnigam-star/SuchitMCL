@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     GOOGLE_SHEET_WEBHOOK_URL: str = ""
     GOOGLE_SHEET_ID: str = ""
     GOOGLE_SHEET_TAB_NAME: str = "Sheet1"
+    DAAK_APPSCRIPT_URL: str = ""
 
     class Config:
         env_file = ".env"

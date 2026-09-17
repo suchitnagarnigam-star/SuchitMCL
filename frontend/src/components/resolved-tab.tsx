@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ShieldCheck, Search, Clock, FileText, ExternalLink, HelpCircle, RefreshCw, User, Clipboard } from "lucide-react";
 import { DEPT_STYLES } from "./desk-tab";
+import { formatPersonName } from "@/lib/formatters";
 
 interface Officer {
   id: string;
@@ -173,7 +174,7 @@ export default function ResolvedTab({ officers }: ResolvedTabProps) {
             >
               <option value="">All Officers</option>
               {officers.map(o => (
-                <option key={o.id} value={o.id}>{o.short_code} — {o.full_name}</option>
+                <option key={o.id} value={o.id}>{o.short_code} — {formatPersonName(o.full_name)}</option>
               ))}
             </select>
           </div>
@@ -270,7 +271,7 @@ export default function ResolvedTab({ officers }: ResolvedTabProps) {
                       <td className="py-4 px-6 space-y-1.5">
                         {item.officer ? (
                           <div>
-                            <p className="font-bold text-slate-800">{item.officer.full_name}</p>
+                            <p className="font-bold text-slate-800">{formatPersonName(item.officer.full_name)}</p>
                             <p className="text-[10px] text-slate-400 font-semibold">{item.officer.designation} ({item.officer.short_code})</p>
                           </div>
                         ) : (

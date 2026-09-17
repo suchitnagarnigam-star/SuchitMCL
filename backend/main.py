@@ -31,7 +31,7 @@ class OfficerCreateSchema(BaseModel):
     short_code: str
     full_name: str
     designation: str
-    officer_type: str  # joint_commissioner / zonal_commissioner / superintending_engineer
+    officer_type: str  # additional_commissioner / joint_commissioner / zonal_commissioner / superintending_engineer
     zone: Optional[str] = None  # A / B / C / D
     department: Optional[str] = None
     whatsapp_number: str
@@ -90,16 +90,62 @@ def generate_whatsapp_message(news_item: Dict[str, Any], officer: Dict[str, Any]
 
     remarks_block = ""
     if remarks and remarks.strip():
-        remarks_block = f"📋 *Commissioner's Remarks:*\n{remarks.strip()}\n\n"
+        remarks_block = f"💡 *Suggested Action:*\n{remarks.strip()}\n\n"
 
+    # Check if item is an official Daak grievance
+    is_daak = (news_item.get("source_type") == "daak") or (isinstance(summary, dict) and summary.get("source_type") == "daak")
+    
+    if is_daak:
+        ref_no = ""
+        sender_info = ""
+        summary_text = ""
+        if isinstance(summary, dict):
+            ref_no = summary.get("reference_number") or summary.get("diary_no") or ""
+            sender_name = summary.get("sender_name") or ""
+            sender_contact = summary.get("sender_contact") or ""
+            if sender_name and sender_contact:
+                sender_info = f"{sender_name} ({sender_contact})"
+            else:
+                sender_info = sender_name or sender_contact or "Citizen"
+            summary_text = summary.get("what") or news_item.get("body", "")
+        else:
+            summary_text = str(summary) if summary else news_item.get("body", "")
+            
+        ref_line = f"📄 *Ref / Diary No:* {ref_no}\n" if ref_no else ""
+        sender_line = f"👤 *Complainant:* {sender_info}\n" if sender_info else ""
+
+        template = f"""🏛️ *Suchit Nagar Nigam — ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ*
+*MCL Official Daak Grievance*
+
+{short_code} — {full_name}
+*Designation:* {desig}
+
+An official citizen Daak grievance has been marked to you by Corporation Commissioner:
+
+📬 *{headline}*
+{ref_line}{sender_line}🏷️ *Department:* {dept}
+⚠️ *Severity:* {sev}
+
+*Summary:*
+{summary_text}
+
+{remarks_block}Please inspect the site, take necessary action, and update ATR status
+on the MCL dashboard at your earliest.
+
+Please visit https://suchit-mcl.vercel.app to upload ATRs.
+
+— Municipal Corporation Ludhiana (MCL)"""
+        return template
+
+    # Media intelligence template
+    summary_text = summary.get("what", "") if isinstance(summary, dict) else str(summary)
     template = f"""🏛️ *Suchit Nagar Nigam — ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ*
 *MCL Media Intelligence Brief*
 
 {short_code} — {full_name}
 *Designation:* {desig}
 
-A news item has been flagged and assigned to you by the
-Office of the Corporation Commissioner, Ludhiana:
+A news item has been flagged and assigned to you:
 
 📰 *{headline}*
 📅 {today_str} | 📰 {pub}
@@ -107,15 +153,14 @@ Office of the Corporation Commissioner, Ludhiana:
 ⚠️ *Severity:* {sev}
 
 *Summary:*
-{summary}
+{summary_text}
 
 {remarks_block}Please take necessary action and update status
 on the MCL dashboard at your earliest.
 
 Please visit https://suchit-mcl.vercel.app to upload ATRs.
 
-— Office of the Corporation Commissioner
-Municipal Corporation Ludhiana"""
+— Municipal Corporation Ludhiana (MCL)"""
     
     return template
 
@@ -166,21 +211,74 @@ def get_news_items(
     date_str: Optional[str] = Query(None, alias="date"),
     department: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
-    status: Optional[str] = Query("pending")
+    status: Optional[str] = Query(None),
+    source_type: Optional[str] = Query(None)
 ):
-    if not date_str:
-        date_str = date.today().isoformat()
+    # If date_str is "all" or empty string, do not filter by date
+    if date_str and date_str.lower() in ["all", "none", ""]:
+        date_str = None
+
+    # If status is "all" or empty string, do not filter by status
+    if status and status.lower() in ["all", "none", ""]:
+        status = None
         
     try:
         items = db.get_news_items(
             date_str=date_str,
             department=department,
             severity=severity,
-            status=status
+            status=status,
+            source_type=source_type
         )
         return items
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- DAAK GRIEVANCES ENDPOINTS ---
+
+@app.post("/daak/sync")
+def sync_daak_from_sheet(url: Optional[str] = Query(None)):
+    """
+    Pulls pending citizen Daak grievances from the configured Google Apps Script Web App
+    and ingests them into the Commissioner's Desk for review and dispatch.
+    """
+    try:
+        from backend.daak import fetch_daak_from_appscript, process_and_ingest_daak_rows
+        rows = fetch_daak_from_appscript(url=url)
+        result = process_and_ingest_daak_rows(rows)
+        return {
+            "success": True,
+            "message": f"Successfully synced {result['synced_count']} new Daak grievances ({result['skipped_count']} already up-to-date).",
+            "details": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to sync Daak grievances: {str(e)}")
+
+
+@app.post("/daak/webhook")
+def receive_daak_webhook(payload: Any = Body(...)):
+    """
+    Webhook endpoint to receive pushed Daak grievance rows from Google Apps Script.
+    """
+    try:
+        from backend.daak import process_and_ingest_daak_rows
+        rows = []
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict):
+            if "rows" in payload and isinstance(payload["rows"], list):
+                rows = payload["rows"]
+            else:
+                rows = [payload]
+        result = process_and_ingest_daak_rows(rows)
+        return {
+            "success": True,
+            "message": f"Ingested {result['synced_count']} Daak grievances.",
+            "details": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process Daak webhook: {str(e)}")
 
 
 @app.post("/dispatch/{news_item_id}")
@@ -330,6 +428,7 @@ def get_officers():
     try:
         officers_list = db.get_officers()
         grouped = {
+            "additional_commissioner": [],
             "joint_commissioner": [],
             "zonal_commissioner": [],
             "superintending_engineer": []
@@ -502,128 +601,305 @@ def get_resolved_items_list(
 
 
 @app.get("/overview-stats")
-def get_overview_stats():
+def get_overview_stats(
+    scope: str = Query("month"),
+    selected_date: Optional[str] = Query(None, alias="date"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None)
+):
     """
-    Computes dashboard aggregate stats for the current calendar month.
+    Computes dashboard aggregate stats for 'today', 'month', 'all', a specific date,
+    or a date range based on verified dispatched items.
+    Excludes pending un-dispatched news and discarded administrative/political noise.
     """
     try:
+        # Sanitize parameters if called directly
+        if not isinstance(scope, str):
+            scope = "month"
+        if not isinstance(selected_date, str):
+            selected_date = None
+        if not isinstance(date_from, str):
+            date_from = None
+        if not isinstance(date_to, str):
+            date_to = None
+
         # Load all news items
         all_items = db.get_news_items(status=None, date_str=None)
         
-        # Calculate date limits for the current calendar month
+        # Filter strictly to dispatched items (dispatched, in_progress, resolved)
+        dispatched_items = [
+            x for x in all_items 
+            if x.get("status") in ["dispatched", "in_progress", "resolved"]
+        ]
+        
         now_dt = datetime.now()
+        today_str = now_dt.date().isoformat()
         limit_month = now_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         
-        # Helper to parse database dates
-        def parse_item_date(item_date_str: Optional[str]) -> Optional[datetime]:
-            if not item_date_str:
+        # Helper to parse database dates safely
+        def parse_item_date(val: Any) -> Optional[datetime]:
+            if not val:
                 return None
+            if isinstance(val, datetime):
+                return val
+            if isinstance(val, date):
+                return datetime(val.year, val.month, val.day)
             try:
-                clean_str = item_date_str.split("+")[0].split(".")[0]
+                val_str = str(val).strip().rstrip("Z")
+                clean_str = val_str.split("+")[0].split(".")[0]
                 return datetime.fromisoformat(clean_str)
             except:
                 return None
 
-        # Filter items for current calendar month
-        items_month = []
-        for item in all_items:
-            c_date = parse_item_date(item.get("created_at"))
-            if c_date and c_date >= limit_month:
-                items_month.append(item)
+        def get_item_date_obj(item: Dict[str, Any]) -> Optional[datetime]:
+            return parse_item_date(item.get("dispatched_at")) or parse_item_date(item.get("created_at"))
 
-        # 1. Total items in the current calendar month
-        total_items_month = len(items_month)
+        def get_item_date_str(item: Dict[str, Any]) -> Optional[str]:
+            d = get_item_date_obj(item)
+            return d.date().isoformat() if d else None
 
-        # 2. Urgent Action Required: High severity items that are NOT resolved or discarded
+        scope_clean = scope.lower().strip()
+        target_items = []
+        effective_scope = scope_clean
+
+        if selected_date:
+            effective_scope = f"date:{selected_date}"
+            target_items = [x for x in dispatched_items if get_item_date_str(x) == selected_date]
+        elif date_from or date_to:
+            effective_scope = "custom"
+            for x in dispatched_items:
+                d_str = get_item_date_str(x)
+                if d_str:
+                    if date_from and d_str < date_from:
+                        continue
+                    if date_to and d_str > date_to:
+                        continue
+                    target_items.append(x)
+        elif scope_clean == "today":
+            effective_scope = "today"
+            target_items = [x for x in dispatched_items if get_item_date_str(x) == today_str]
+        elif scope_clean == "all":
+            effective_scope = "all"
+            target_items = dispatched_items
+        else:  # "month"
+            effective_scope = "month"
+            for x in dispatched_items:
+                d = get_item_date_obj(x)
+                if d and d >= limit_month:
+                    target_items.append(x)
+
+        # 1. Total dispatched items in selected scope
+        total_items = len(target_items)
+
+        # 2. Urgent Action Required: High severity items in target scope that are NOT resolved
         urgent_required = len([
-            x for x in all_items 
-            if x.get("severity") == "High" and x.get("status") not in ["resolved", "discarded"]
+            x for x in target_items 
+            if x.get("severity") == "High" and x.get("status") != "resolved"
         ])
 
-        # 3. Under Monitoring: dispatched or in_progress status
+        # 3. Under Monitoring: items in target scope currently dispatched or in_progress
         under_monitoring = len([
-            x for x in all_items 
+            x for x in target_items 
             if x.get("status") in ["dispatched", "in_progress"]
         ])
 
-        # 4. Resolved items resolved in the current calendar month
-        resolved_month = 0
-        for item in all_items:
-            if item.get("status") == "resolved":
-                res_date = parse_item_date(item.get("resolved_at"))
-                if res_date and res_date >= limit_month:
-                    resolved_month += 1
+        # 4. Resolved items in target scope
+        resolved_count = len([
+            x for x in target_items 
+            if x.get("status") == "resolved"
+        ])
 
-        # 4b. Resolved Percentage: items created this month that are resolved
+        # 4b. Resolved Percentage: cases solved in target scope
         resolved_percentage = 0
-        if total_items_month > 0:
-            resolved_created_in_month = len([
-                x for x in items_month 
-                if x.get("status") == "resolved"
-            ])
-            resolved_percentage = round((resolved_created_in_month / total_items_month) * 100)
+        if total_items > 0:
+            resolved_percentage = round((resolved_count / total_items) * 100)
 
-        # 5. Marked to Officer Breakdown
-        # Fetch active dispatches
+        # 5. Marked to Officer Breakdown (Officer-wise complaints with urgency split)
+        target_ids = set(x["id"] for x in target_items)
+        target_map = {x["id"]: x for x in target_items}
         dispatches = db.get_dispatched()
-        officer_counts: Dict[str, int] = {}
-        for d in dispatches:
-            o_name = d.get("officer", {}).get("full_name")
-            if o_name:
-                officer_counts[o_name] = officer_counts.get(o_name, 0) + 1
         
-        breakdown_list = [
-            {"officer_name": name, "count": count}
-            for name, count in officer_counts.items()
-        ]
-        breakdown_list.sort(key=lambda x: x["count"], reverse=True)
+        officer_stats: Dict[str, Dict[str, Any]] = {}
+        if target_ids:
+            for d in dispatches:
+                nid = d.get("news_item_id")
+                if nid in target_ids:
+                    off = d.get("officer", {})
+                    o_name = off.get("full_name")
+                    if not o_name:
+                        continue
+                    if o_name not in officer_stats:
+                        officer_stats[o_name] = {
+                            "officer_name": o_name,
+                            "short_code": off.get("short_code", ""),
+                            "designation": off.get("designation", ""),
+                            "count": 0,
+                            "urgent_count": 0,
+                            "monitoring_count": 0,
+                            "resolved_count": 0
+                        }
+                    officer_stats[o_name]["count"] += 1
+                    item = target_map.get(nid, d.get("news_item", {}))
+                    sev = item.get("severity")
+                    status = item.get("status")
+                    if status == "resolved":
+                        officer_stats[o_name]["resolved_count"] += 1
+                    elif sev == "High":
+                        officer_stats[o_name]["urgent_count"] += 1
+                    else:
+                        officer_stats[o_name]["monitoring_count"] += 1
+        
+        officer_breakdown = list(officer_stats.values())
+        officer_breakdown.sort(key=lambda x: x["count"], reverse=True)
 
-        # 6. Urgency Trend: Counts per day for the days of the current calendar month
+        # 6. Department-wise Breakdown
+        dept_stats: Dict[str, Dict[str, Any]] = {}
+        for item in target_items:
+            dept = item.get("department", "Other") or "Other"
+            if dept not in dept_stats:
+                dept_stats[dept] = {
+                    "department": dept,
+                    "count": 0,
+                    "urgent_count": 0,
+                    "monitoring_count": 0,
+                    "resolved_count": 0
+                }
+            dept_stats[dept]["count"] += 1
+            sev = item.get("severity")
+            status = item.get("status")
+            if status == "resolved":
+                dept_stats[dept]["resolved_count"] += 1
+            elif sev == "High":
+                dept_stats[dept]["urgent_count"] += 1
+            else:
+                dept_stats[dept]["monitoring_count"] += 1
+        
+        department_breakdown = list(dept_stats.values())
+        department_breakdown.sort(key=lambda x: x["count"], reverse=True)
+
+        # 7. Urgency Trend: Counts per day
         trend_list = []
-        days_in_month = now_dt.day
-        for d_offset in range(days_in_month):
-            curr_date = (limit_month + timedelta(days=d_offset)).date()
-            curr_date_str = curr_date.isoformat()
-            
-            # Count items created on this date
-            high_count = 0
-            med_count = 0
-            for item in all_items:
-                c_date = parse_item_date(item.get("created_at"))
-                if c_date and c_date.date() == curr_date:
-                    if item.get("severity") == "High":
-                        high_count += 1
-                    elif item.get("severity") == "Medium":
-                        med_count += 1
-                        
-            trend_list.append({
-                "date": curr_date_str,
-                "critical_count": high_count,
-                "watch_count": med_count
-            })
-
-        # 7. Latest Marked News (dispatched/in_progress/resolved in current month, limit 10)
-        marked_news = []
-        for item in items_month:
-            if item.get("status") in ["dispatched", "in_progress", "resolved"]:
-                marked_news.append({
-                    "headline": item.get("headline", ""),
-                    "department": item.get("department", ""),
-                    "date": (parse_item_date(item.get("created_at")) or now_dt).date().isoformat()
-                })
-        # Sort latest first
-        marked_news.sort(key=lambda x: x["date"], reverse=True)
-        latest_marked_news = marked_news[:10]
+        if selected_date or scope_clean == "today":
+            try:
+                anchor_date = datetime.fromisoformat(selected_date).date() if selected_date else now_dt.date()
+            except:
+                anchor_date = now_dt.date()
+            start_date = anchor_date - timedelta(days=6)
+            for d_offset in range(7):
+                curr_date = start_date + timedelta(days=d_offset)
+                curr_date_str = curr_date.isoformat()
+                high_count = sum(1 for item in dispatched_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "High")
+                med_count = sum(1 for item in dispatched_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "Medium")
+                trend_list.append({"date": curr_date_str, "critical_count": high_count, "watch_count": med_count})
+        elif date_from or date_to:
+            try:
+                start_d = datetime.fromisoformat(date_from).date() if date_from else (now_dt - timedelta(days=14)).date()
+                end_d = datetime.fromisoformat(date_to).date() if date_to else now_dt.date()
+            except:
+                start_d = (now_dt - timedelta(days=14)).date()
+                end_d = now_dt.date()
+            num_days = min(max((end_d - start_d).days + 1, 1), 60)
+            for d_offset in range(num_days):
+                curr_date = start_d + timedelta(days=d_offset)
+                curr_date_str = curr_date.isoformat()
+                high_count = sum(1 for item in dispatched_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "High")
+                med_count = sum(1 for item in dispatched_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "Medium")
+                trend_list.append({"date": curr_date_str, "critical_count": high_count, "watch_count": med_count})
+        elif scope_clean == "all":
+            start_date = (now_dt - timedelta(days=29)).date()
+            for d_offset in range(30):
+                curr_date = start_date + timedelta(days=d_offset)
+                curr_date_str = curr_date.isoformat()
+                high_count = sum(1 for item in target_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "High")
+                med_count = sum(1 for item in target_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "Medium")
+                trend_list.append({"date": curr_date_str, "critical_count": high_count, "watch_count": med_count})
+        else:  # "month"
+            days_in_month = now_dt.day
+            for d_offset in range(days_in_month):
+                curr_date = (limit_month + timedelta(days=d_offset)).date()
+                curr_date_str = curr_date.isoformat()
+                high_count = sum(1 for item in target_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "High")
+                med_count = sum(1 for item in target_items if get_item_date_str(item) == curr_date_str and item.get("severity") == "Medium")
+                trend_list.append({"date": curr_date_str, "critical_count": high_count, "watch_count": med_count})
 
         return {
-            "total_items_month": total_items_month,
+            "scope": effective_scope,
+            "selected_date": selected_date,
+            "date_from": date_from,
+            "date_to": date_to,
+            "total_items": total_items,
+            "total_items_month": total_items,  # backward compatibility
             "urgent_required": urgent_required,
             "under_monitoring": under_monitoring,
-            "resolved_month": resolved_month,
+            "resolved_count": resolved_count,
+            "resolved_month": resolved_count,  # backward compatibility
             "resolved_percentage": resolved_percentage,
-            "marked_to_officer_breakdown": breakdown_list,
-            "urgency_trend_month": trend_list,
-            "latest_marked_news": latest_marked_news
+            "marked_to_officer_breakdown": officer_breakdown,
+            "department_breakdown": department_breakdown,
+            "urgency_trend_month": trend_list
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/sentiment-analysis")
+def get_sentiment_analysis(
+    date_str: Optional[str] = Query(None, alias="date"),
+    department: Optional[str] = Query(None),
+    generate_ai: bool = Query(True)
+):
+    """
+    Computes comprehensive AI Sentiment Analysis, District Media Mood Index,
+    most suffering wards by domain, and commissioner directives based on dispatched items.
+    Excludes un-dispatched pending news items and discarded administrative/political noise.
+    """
+    try:
+        from backend.sentiment import calculate_sentiment_metrics, generate_ai_sentiment_synthesis
+        
+        # Load items
+        if date_str and date_str.lower() in ["all", "none", ""]:
+            date_str = None
+            
+        all_items = db.get_news_items(
+            date_str=date_str,
+            department=department if department and department != "All" else None,
+            status=None
+        )
+        
+        # Filter strictly to dispatched items (dispatched, in_progress, resolved)
+        items = [
+            x for x in all_items 
+            if x.get("status") in ["dispatched", "in_progress", "resolved"]
+        ]
+        
+        metrics = calculate_sentiment_metrics(items)
+        
+        sample_headlines = [item.get("headline", "") for item in items if item.get("headline")]
+        
+        ai_synthesis = None
+        if generate_ai and len(items) > 0:
+            ai_synthesis = generate_ai_sentiment_synthesis(metrics, sample_headlines)
+            
+        return {
+            "success": True,
+            "metrics": metrics,
+            "ai_synthesis": ai_synthesis,
+            "queried_count": len(items)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/cleanup-duplicates")
+@app.get("/cleanup-duplicates")
+def cleanup_duplicates(dry_run: bool = Query(False)):
+    """
+    Executes automated semantic incident clustering and purge of duplicate news items.
+    If dry_run=True, returns audit preview without modifying database.
+    """
+    try:
+        from backend.dedup import execute_database_cleanup
+        result = execute_database_cleanup(dry_run=dry_run)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutDashboard, FileUp, ShieldCheck, BarChart3, Briefcase, FileSpreadsheet } from "lucide-react";
+import { LayoutDashboard, FileUp, ShieldCheck, BarChart3, Briefcase, FileSpreadsheet, Map, BrainCircuit } from "lucide-react";
 
 interface SidebarProps {
   activeTab: string;
@@ -10,6 +10,8 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const menuItems = [
     { id: "overview", name: "Overview", icon: BarChart3 },
     { id: "desk", name: "Commissioner's Desk", icon: LayoutDashboard },
+    { id: "heatmap", name: "Ward Choropleth", icon: Map },
+    { id: "sentiment", name: "AI Sentiment", icon: BrainCircuit },
     { id: "mapping", name: "Officer Mapping", icon: Briefcase },
     { id: "dispatched", name: "Dispatched Items", icon: FileSpreadsheet },
     { id: "resolved", name: "Resolved", icon: ShieldCheck },

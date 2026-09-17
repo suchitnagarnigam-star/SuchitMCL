@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { User, Calendar, FileText, CheckCircle2, ChevronRight, Upload, AlertCircle, Eye, ExternalLink, RefreshCw } from "lucide-react";
+import { 
+  User, Calendar, FileText, CheckCircle2, ChevronRight, 
+  Upload, AlertCircle, Eye, ExternalLink, RefreshCw,
+  Copy, Check, ChevronDown, ChevronUp, MapPin, Sparkles, MessageSquare
+} from "lucide-react";
 import { DEPT_STYLES } from "./desk-tab";
+import { formatPersonName, cleanInitials } from "@/lib/formatters";
 
 interface Evidence {
   id: string;
@@ -10,6 +15,14 @@ interface Evidence {
   uploaded_at: string;
 }
 
+interface StructuredSummary {
+  when?: string;
+  where?: string;
+  what?: string;
+  next_steps?: string;
+  publications_reported?: string[];
+}
+
 interface NewsItem {
   id: string;
   headline: string;
@@ -17,7 +30,7 @@ interface NewsItem {
   publication: string;
   department: string;
   severity: string;
-  summary: string | any;
+  summary: string | StructuredSummary;
   page_number: number;
   status: string; // dispatched / in_progress / resolved
   remarks?: string | null;
@@ -37,13 +50,52 @@ interface ActiveOfficer {
   active_items: NewsItem[];
 }
 
+const getSummaryDetails = (item: NewsItem) => {
+  if (typeof item.summary === "object" && item.summary !== null) {
+    return {
+      when: item.summary.when || "Not specified",
+      where: item.summary.where || "Not specified",
+      what: item.summary.what || "Not specified",
+      next_steps: item.summary.next_steps || "Not specified",
+      publications_reported: item.summary.publications_reported || []
+    };
+  }
+  if (typeof item.summary === "string") {
+    try {
+      const parsed = JSON.parse(item.summary);
+      if (typeof parsed === "object" && parsed !== null) {
+        return {
+          when: parsed.when || "Not specified",
+          where: parsed.where || "Not specified",
+          what: parsed.what || item.summary,
+          next_steps: parsed.next_steps || "Not specified",
+          publications_reported: parsed.publications_reported || []
+        };
+      }
+    } catch {}
+    return {
+      when: "Not specified",
+      where: "Not specified",
+      what: item.summary,
+      next_steps: "Not specified",
+      publications_reported: []
+    };
+  }
+  return {
+    when: "Not specified",
+    where: "Not specified",
+    what: "Not specified",
+    next_steps: "Not specified",
+    publications_reported: []
+  };
+};
+
 export default function MappingTab() {
   const [officers, setOfficers] = useState<ActiveOfficer[]>([]);
   const [selectedOfficerId, setSelectedOfficerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Track draft state per news item for the action panel
-  // itemId -> { status, description, isUploadingEvidence, uploadError }
   const [draftActions, setDraftActions] = useState<Record<string, { status: string; description: string; isDirty: boolean }>>({});
   
   // Track evidence upload loading status per item
@@ -51,6 +103,22 @@ export default function MappingTab() {
 
   // Track items animating out
   const [fadingItemIds, setFadingItemIds] = useState<Set<string>>(new Set());
+
+  // Track expanded full articles and copy status
+  const [expandedArticles, setExpandedArticles] = useState<Record<string, boolean>>({});
+  const [copiedArticleIds, setCopiedArticleIds] = useState<Record<string, boolean>>({});
+
+  const toggleExpandArticle = (id: string) => {
+    setExpandedArticles(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const handleCopyArticle = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedArticleIds(prev => ({ ...prev, [id]: true }));
+    setTimeout(() => {
+      setCopiedArticleIds(prev => ({ ...prev, [id]: false }));
+    }, 2000);
+  };
 
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
@@ -96,6 +164,7 @@ export default function MappingTab() {
   }, [officers]);
 
   // Group officers for Left List
+  const additionalCommissioners = officers.filter(o => o.officer_type === "additional_commissioner");
   const jointCommissioners = officers.filter(o => o.officer_type === "joint_commissioner");
   const zonalCommissioners = officers.filter(o => o.officer_type === "zonal_commissioner");
   const superintendingEngineers = officers.filter(o => o.officer_type === "superintending_engineer");
@@ -114,7 +183,7 @@ export default function MappingTab() {
   };
 
   const getInitials = (name: string) => {
-    return name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase();
+    return cleanInitials(name);
   };
 
   // Handle draft field changes
@@ -289,7 +358,7 @@ export default function MappingTab() {
                   </div>
                   <div className="truncate">
                     <span className="text-xs font-bold block leading-snug">{o.short_code}</span>
-                    <span className="text-[10px] text-slate-500 truncate block">{o.full_name}</span>
+                    <span className="text-[10px] text-slate-500 truncate block">{formatPersonName(o.full_name)}</span>
                   </div>
                 </div>
 
@@ -353,6 +422,7 @@ export default function MappingTab() {
             <h3 className="text-[10px] font-bold text-[#0A2540] uppercase tracking-wider border-b border-slate-100 pb-2">Active Task Registry</h3>
             
             <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              {renderOfficerListSection("Additional Commissioner", additionalCommissioners)}
               {renderOfficerListSection("Joint Commissioners", jointCommissioners)}
               {renderOfficerListSection("Zonal Commissioners", zonalCommissioners)}
               {renderOfficerListSection("Superintending Engineers", superintendingEngineers)}
@@ -370,7 +440,7 @@ export default function MappingTab() {
                       {getInitials(selectedOfficer.full_name)}
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-[#0A2540]">{selectedOfficer.full_name}</h3>
+                      <h3 className="text-sm font-black text-[#0A2540]">{formatPersonName(selectedOfficer.full_name)}</h3>
                       <p className="text-xs text-slate-500 font-semibold mt-0.5">{selectedOfficer.designation} ({selectedOfficer.short_code})</p>
                     </div>
                   </div>
@@ -404,6 +474,11 @@ export default function MappingTab() {
                       ? new Date(item.dispatched_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
                       : "Recently";
 
+                    const details = getSummaryDetails(item);
+                    const isExpanded = !!expandedArticles[item.id];
+                    const isCopied = !!copiedArticleIds[item.id];
+                    const articleText = item.body || details.what;
+
                     return (
                       <div
                         key={item.id}
@@ -414,7 +489,7 @@ export default function MappingTab() {
                         }`}
                       >
                         {/* News Item Card Details block */}
-                        <div className="p-5 space-y-3.5">
+                        <div className="p-5 space-y-4">
                           {/* Card Subtitle */}
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 text-[10px]">
                             <span className="text-slate-500 font-bold flex items-center">
@@ -440,21 +515,128 @@ export default function MappingTab() {
                             </div>
                           </div>
 
-                          {/* Headline */}
-                          <h4 className="text-xs font-bold text-slate-800 leading-snug">{item.headline}</h4>
-                          
-                          {/* Summary */}
-                          <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                            {typeof item.summary === "object" && item.summary !== null
-                              ? (item.summary.what || "Not specified")
-                              : item.summary}
-                          </p>
+                          {/* Headline & Metadata */}
+                          <div>
+                            <h4 className="text-sm font-black text-slate-850 leading-snug tracking-tight">{item.headline}</h4>
+                            <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400 font-bold mt-1">
+                              <span>📰 {item.publication}</span>
+                              <span>•</span>
+                              <span>Page {item.page_number}</span>
+                              {details.where !== "Not specified" && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-slate-600 flex items-center">
+                                    <MapPin className="w-3 h-3 mr-0.5 text-red-500" /> {details.where}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
 
-                          {/* Remarks */}
-                          {item.remarks && (
-                            <div className="p-3 bg-slate-50 border border-slate-150 rounded-lg text-xs text-slate-600 italic">
-                              <span className="font-bold text-[#0A2540] block not-italic text-[10px] uppercase tracking-wider mb-0.5">Commissioner's Remarks</span>
-                              "{item.remarks}"
+                          {/* 1. AI Structured Summary */}
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center space-x-1 text-[9.5px] font-black text-slate-500 uppercase tracking-widest">
+                              <Sparkles className="w-3 h-3 text-amber-500" />
+                              <span>AI Structured Summary</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                              <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-lg space-y-0.5">
+                                <span className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider flex items-center">
+                                  <Calendar className="w-3 h-3 mr-1 text-slate-400" /> Occurrence / Timeframe
+                                </span>
+                                <p className="text-slate-800 font-semibold text-[11px] leading-snug">{details.when}</p>
+                              </div>
+
+                              <div className="bg-slate-50 border border-slate-200/80 p-2.5 rounded-lg space-y-0.5">
+                                <span className="text-[8.5px] text-slate-400 font-bold uppercase tracking-wider flex items-center">
+                                  <MapPin className="w-3 h-3 mr-1 text-red-500" /> Ward / Concerned Location
+                                </span>
+                                <p className="text-slate-800 font-bold text-[11px] leading-snug">{details.where}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 2. Issue Description */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center space-x-1 text-[9.5px] font-black text-slate-500 uppercase tracking-widest">
+                              <AlertCircle className="w-3 h-3 text-red-500" />
+                              <span>Issue Description & Ground Grievance</span>
+                            </div>
+                            <div className="bg-red-50/20 border border-red-100 p-3 rounded-lg text-slate-700 text-[11.5px] leading-relaxed font-medium">
+                              {details.what}
+                            </div>
+                          </div>
+
+                          {/* 3. Suggested Next Steps */}
+                          {details.next_steps && details.next_steps !== "Not specified" && (
+                            <div className="bg-amber-50/40 border border-amber-200/70 p-3 rounded-lg space-y-1">
+                              <span className="text-[9px] text-amber-800 font-black uppercase tracking-wider flex items-center">
+                                💡 Suggested Next Steps
+                              </span>
+                              <p className="text-slate-700 font-semibold text-[11px] leading-relaxed">
+                                {details.next_steps}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* 4. Full Ingested Article Text (Collapsible & Copyable) */}
+                          <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50/50">
+                            <div className="flex items-center justify-between px-3 py-2 bg-slate-100/70 border-b border-slate-200/70">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandArticle(item.id)}
+                                className="flex items-center space-x-1.5 text-[10.5px] font-black text-slate-700 hover:text-[#0A2540] transition-colors cursor-pointer"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-slate-500" />
+                                <span>Full Ingested Article Text</span>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                                )}
+                              </button>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleCopyArticle(item.id, articleText)}
+                                className="flex items-center space-x-1 text-[9.5px] font-bold text-slate-500 hover:text-[#0A2540] bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs transition-colors cursor-pointer"
+                              >
+                                {isCopied ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                    <span className="text-emerald-600">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3 text-slate-400" />
+                                    <span>Copy Text</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+
+                            {isExpanded ? (
+                              <div className="p-3.5 text-slate-700 font-mono text-[11px] leading-relaxed max-h-60 overflow-y-auto whitespace-pre-wrap select-all bg-white">
+                                {articleText}
+                              </div>
+                            ) : (
+                              <div 
+                                onClick={() => toggleExpandArticle(item.id)}
+                                className="p-2.5 text-slate-500 text-[10.5px] line-clamp-2 italic cursor-pointer hover:bg-slate-100/50 transition-colors"
+                                title="Click to view full ingested article"
+                              >
+                                "{articleText.slice(0, 180)}..." <span className="text-[#0A2540] font-bold not-italic underline ml-1">Click to expand</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 5. Dispatch Remarks (if distinct from suggested next steps) */}
+                          {item.remarks && item.remarks.trim() !== details.next_steps.trim() && (
+                            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700">
+                              <span className="font-black text-slate-800 block text-[9.5px] uppercase tracking-wider mb-0.5 flex items-center">
+                                <MessageSquare className="w-3 h-3 mr-1 text-slate-500" /> Additional Dispatch Notes
+                              </span>
+                              <p className="italic font-medium text-[11px]">"{item.remarks}"</p>
                             </div>
                           )}
 

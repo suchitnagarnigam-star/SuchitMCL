@@ -688,7 +688,10 @@ You must identify, segment, translate, and analyze distinct news articles that h
    - "Medium": Service disruptions, pending development projects, Councillor criticisms, or general public complaints with local evidence.
    - "Low": Minor local issues (e.g. minor cleanups or small park repairs) that are still actionable, but not routine/promotional updates.
 
-6. **JSON Schema Output**:
+6. **Honorific Name Prefix (CRITICAL)**:
+   Whenever mentioning any officer, official, public representative, MLA, councillor, or citizen by personal name in headline, body, what, or next_steps, ALWAYS prefix the name with 'Sh.' (e.g., 'Sh. Shyam Lal', 'Sh. Ranjit Singh', 'Sh. Vijay Kumar', etc.) or 'Smt.' for women. Never mention an unadorned personal name without 'Sh.' / 'Smt.'.
+
+7. **JSON Schema Output**:
    You must respond with a raw JSON array of objects. Do NOT wrap the JSON in markdown formatting (no ```json ... ```), do not add preamble, introductory text, or explanatory footnotes. Output ONLY the JSON array.
    Each object in the array must conform EXACTLY to the following schema:
    {{
@@ -702,7 +705,9 @@ You must identify, segment, translate, and analyze distinct news articles that h
        "when": "Specific date, day, or timeframe mentioned (e.g., 'Thursday morning', 'July 9, 2026'). If not specified, write 'Not specified'.",
        "where": "Specific location mentioned (e.g., 'Ward 34', 'Ghumar Mandi', 'Ferozepur Road'). Be as granular as possible. If not specified, write 'Not specified'.",
        "what": "A clear 2-3 sentence explanation of the problem, issue, or development.",
-       "next_steps": "2-3 highly actionable and concrete suggestions for the assigned MCL officer/department to address this issue (e.g., 'Conduct site inspection of the sewer line', 'Issue notice to the builder')."
+       "next_steps": "2-3 highly actionable and concrete suggestions for the assigned MCL officer/department to address this issue (e.g., 'Conduct site inspection of the sewer line', 'Issue notice to the builder').",
+       "is_actionable_grievance": true, // Set to true if this is an active citizen grievance, broken infrastructure, garbage, waterlogging, or violation. Set to false if it is a general review meeting, routine announcement, or ceremonial event.
+       "content_category": "civic_grievance" // "civic_grievance" | "administrative_notice" | "policy_scheme"
      }}
    }}
 
@@ -724,7 +729,9 @@ Expected JSON Output:
       "when": "Yesterday",
       "where": "Ward 32, Rahon Road",
       "what": "Residents faced sewer blockage on Rahon Road, drawing criticism from the local councillor.",
-      "next_steps": "Conduct site inspection of the sewer line and dispatch a super suction machine to clear the blockage."
+      "next_steps": "Conduct site inspection of the sewer line and dispatch a super suction machine to clear the blockage.",
+      "is_actionable_grievance": true,
+      "content_category": "civic_grievance"
     }}
   }}
 ]
@@ -772,6 +779,48 @@ JSON output (must conform to schema with page_number set strictly to {p_num}):""
         # Merge adjacent page segments for articles spanning consecutive pages
         news_items = merge_consecutive_articles(news_items)
 
+        # Cross-article semantic deduplication and incident clustering
+        try:
+            from backend.dedup import cluster_and_deduplicate
+            # Temporary ID assignment for clustering if missing
+            for idx, it in enumerate(news_items):
+                if not it.get("id"):
+                    it["id"] = f"temp_upload_{idx}_{it.get('page_number', 1)}"
+                    
+            clustering_res = cluster_and_deduplicate(news_items)
+            
+            # Map of master IDs to cluster metadata
+            master_clusters = {c["master_id"]: c for c in clustering_res.get("clusters", [])}
+            all_dup_ids = set()
+            for c in clustering_res.get("clusters", []):
+                all_dup_ids.update(c.get("duplicate_ids", []))
+                
+            deduped_items = []
+            for item in news_items:
+                i_id = item.get("id")
+                if i_id in all_dup_ids:
+                    continue # Skip duplicate
+                
+                # If item is a master with duplicates, attach multi-publication metadata
+                if i_id in master_clusters and master_clusters[i_id].get("duplicate_count", 0) > 0:
+                    c_info = master_clusters[i_id]
+                    s = item.get("summary")
+                    if isinstance(s, dict):
+                        s["media_coverage_count"] = c_info["total_coverage_count"]
+                        s["publications_reported"] = c_info["publications"]
+                    item["summary"] = s
+                
+                deduped_items.append(item)
+
+            if deduped_items and len(deduped_items) < len(news_items):
+                print(f"Pipeline Dedup: Consolidated {len(news_items)} raw articles into {len(deduped_items)} unique incidents (merged {len(news_items) - len(deduped_items)} duplicates).")
+                update_pdf_upload(upload_id, {
+                    "progress_log": f"AI Deduplication: Consolidated {len(news_items)} raw articles into {len(deduped_items)} unique master incidents."
+                })
+                news_items = deduped_items
+        except Exception as dedup_err:
+            print(f"Warning: Ingestion deduplication failed: {dedup_err}")
+
         # Fallback to local keyword extraction if no news items could be extracted via AI
         if not news_items:
             print("No news items extracted via AI. Running local keyword fallback...")
@@ -792,7 +841,7 @@ JSON output (must conform to schema with page_number set strictly to {p_num}):""
         items_count = len(news_items)
         print(f"Segmented {items_count} news items.")
         update_pdf_upload(upload_id, {
-            "progress_log": f"AI Segmented and Classified {items_count} news items. Storing records..."
+            "progress_log": f"AI Segmented, De-duplicated and Classified {items_count} clean news items. Storing records..."
         })
 
         # Fetch mappings & officers for mapping suggested officer logs
