@@ -163,11 +163,20 @@ export default function OverviewTab() {
           const enrichedOfficers = Object.values(offMap).sort((a, b) => b.count - a.count);
           const enrichedDepts = Object.values(deptMap).sort((a, b) => b.count - a.count);
 
-          const uniqueNewsItemIds = new Set(filteredDispatches.map(d => d.news_item_id));
-          const totalDispatchedInScope = uniqueNewsItemIds.size;
-          const urgentInScope = filteredDispatches.filter(d => d.news_item?.severity === "High" && d.news_item?.status !== "resolved").length;
-          const monitoringInScope = filteredDispatches.filter(d => ["dispatched", "in_progress"].includes(d.news_item?.status)).length;
-          const resolvedInScope = filteredDispatches.filter(d => d.news_item?.status === "resolved").length;
+          // Unique news items in scope for consistent grievance metrics
+          const uniqueNewsMap = new Map<string, any>();
+          filteredDispatches.forEach(d => {
+            const nid = d.news_item_id || d.id;
+            if (nid && !uniqueNewsMap.has(nid)) {
+              uniqueNewsMap.set(nid, d);
+            }
+          });
+          const uniqueItemsInScope = Array.from(uniqueNewsMap.values());
+
+          const totalDispatchedInScope = uniqueItemsInScope.length;
+          const urgentInScope = uniqueItemsInScope.filter(d => d.news_item?.severity === "High" && d.news_item?.status !== "resolved").length;
+          const monitoringInScope = uniqueItemsInScope.filter(d => ["dispatched", "in_progress"].includes(d.news_item?.status)).length;
+          const resolvedInScope = uniqueItemsInScope.filter(d => d.news_item?.status === "resolved").length;
 
           // Compute accurate urgency trend strictly based on dispatched items
           const trendList: Trend[] = [];
@@ -602,7 +611,7 @@ export default function OverviewTab() {
             <p className="text-[8.5px] text-slate-500 font-medium">
               {timeScope === "today" && "Actionable cases dispatched today"}
               {timeScope === "month" && (
-                <span>{stats.total_items !== undefined ? stats.total_items : (stats.under_monitoring + (stats.resolved_count ?? stats.resolved_month ?? 0))} dispatched of {stats.total_items_month || 170} monitored</span>
+                <span>{stats.total_items ?? (stats.under_monitoring + (stats.resolved_count ?? 0))} dispatched ({stats.under_monitoring} active, {stats.resolved_count ?? 0} resolved)</span>
               )}
               {timeScope === "all" && "Cumulative actionable dispatches"}
               {timeScope === "date" && `Dispatched on ${formattedDate || selectedDate}`}
