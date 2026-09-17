@@ -169,6 +169,61 @@ export default function OverviewTab() {
           const monitoringInScope = filteredDispatches.filter(d => ["dispatched", "in_progress"].includes(d.news_item?.status)).length;
           const resolvedInScope = filteredDispatches.filter(d => d.news_item?.status === "resolved").length;
 
+          // Compute accurate urgency trend strictly based on dispatched items
+          const trendList: Trend[] = [];
+          const now = new Date();
+
+          if (activeScope === "today" || (activeScope === "date" && activeDate)) {
+            const anchor = activeDate ? new Date(activeDate + "T00:00:00") : now;
+            for (let i = 6; i >= 0; i--) {
+              const d = new Date(anchor);
+              d.setDate(d.getDate() - i);
+              const dIso = d.toISOString().slice(0, 10);
+              const crit = allDispatches.filter(x => {
+                const dt = (x.dispatched_at || x.created_at || x.news_item?.created_at || "").slice(0, 10);
+                return dt === dIso && x.news_item?.severity === "High";
+              }).length;
+              const watch = allDispatches.filter(x => {
+                const dt = (x.dispatched_at || x.created_at || x.news_item?.created_at || "").slice(0, 10);
+                return dt === dIso && x.news_item?.severity !== "High";
+              }).length;
+              trendList.push({ date: dIso, critical_count: crit, watch_count: watch });
+            }
+          } else if (activeScope === "all") {
+            for (let i = 29; i >= 0; i--) {
+              const d = new Date(now);
+              d.setDate(d.getDate() - i);
+              const dIso = d.toISOString().slice(0, 10);
+              const crit = allDispatches.filter(x => {
+                const dt = (x.dispatched_at || x.created_at || x.news_item?.created_at || "").slice(0, 10);
+                return dt === dIso && x.news_item?.severity === "High";
+              }).length;
+              const watch = allDispatches.filter(x => {
+                const dt = (x.dispatched_at || x.created_at || x.news_item?.created_at || "").slice(0, 10);
+                return dt === dIso && x.news_item?.severity !== "High";
+              }).length;
+              trendList.push({ date: dIso, critical_count: crit, watch_count: watch });
+            }
+          } else {
+            // "month" (Current Month days from 1 to today)
+            const daysInMonth = now.getDate();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, "0");
+            for (let day = 1; day <= daysInMonth; day++) {
+              const dayStr = String(day).padStart(2, "0");
+              const dIso = `${year}-${month}-${dayStr}`;
+              const crit = allDispatches.filter(x => {
+                const dt = (x.dispatched_at || x.created_at || x.news_item?.created_at || "").slice(0, 10);
+                return dt === dIso && x.news_item?.severity === "High";
+              }).length;
+              const watch = allDispatches.filter(x => {
+                const dt = (x.dispatched_at || x.created_at || x.news_item?.created_at || "").slice(0, 10);
+                return dt === dIso && x.news_item?.severity !== "High";
+              }).length;
+              trendList.push({ date: dIso, critical_count: crit, watch_count: watch });
+            }
+          }
+
           // Merge enriched data
           const hasExistingOfficerUrgency = (data.marked_to_officer_breakdown || []).some(
             (o: any) => (o.urgent_count || 0) > 0 || (o.monitoring_count || 0) > 0
@@ -182,8 +237,10 @@ export default function OverviewTab() {
             resolved_count: resolvedInScope,
             resolved_percentage: totalDispatchedInScope > 0 ? Math.round((resolvedInScope / totalDispatchedInScope) * 100) : 0,
             marked_to_officer_breakdown: (!hasExistingOfficerUrgency && enrichedOfficers.length > 0) ? enrichedOfficers : (data.marked_to_officer_breakdown || enrichedOfficers),
-            department_breakdown: (!data.department_breakdown || data.department_breakdown.length === 0) ? enrichedDepts : data.department_breakdown
+            department_breakdown: (!data.department_breakdown || data.department_breakdown.length === 0) ? enrichedDepts : data.department_breakdown,
+            urgency_trend_month: trendList
           };
+
         }
       } catch (enrichErr) {
         console.warn("Dispatches fallback enrichment skipped:", enrichErr);
