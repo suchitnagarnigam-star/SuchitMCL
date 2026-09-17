@@ -134,7 +134,37 @@ export const LUDHIANA_LANDMARKS: Record<string, { lat: number; lng: number; ward
   "chet singh nagar": { lat: 30.8720, lng: 75.8680, ward: 41, zone: "C" },
   "janakpuri": { lat: 30.9000, lng: 75.8720, ward: 35, zone: "C" },
   "industrial area a": { lat: 30.8980, lng: 75.8700, ward: 35, zone: "C" },
-  "industrial area b": { lat: 30.8900, lng: 75.8750, ward: 34, zone: "C" }
+  "industrial area b": { lat: 30.8900, lng: 75.8750, ward: 34, zone: "C" },
+  "gndec": { lat: 30.8600, lng: 75.8600, ward: 40, zone: "C" },
+  "guru nanak dev engineering college": { lat: 30.8600, lng: 75.8600, ward: 40, zone: "C" },
+  "lohara bridge": { lat: 30.8450, lng: 75.9050, ward: 31, zone: "C" },
+  "ishar nagar": { lat: 30.8500, lng: 75.8950, ward: 31, zone: "C" },
+
+  // Additional Zone D landmarks
+  "rishi nagar": { lat: 30.9050, lng: 75.8200, ward: 54, zone: "D" },
+  "polytechnic college": { lat: 30.9050, lng: 75.8200, ward: 54, zone: "D" },
+  "sbs nagar": { lat: 30.8650, lng: 75.8150, ward: 47, zone: "D" },
+  "shaheed bhagat singh nagar": { lat: 30.8650, lng: 75.8150, ward: 47, zone: "D" },
+  "bharat nagar chowk": { lat: 30.9020, lng: 75.8400, ward: 52, zone: "D" },
+
+  // Additional Zone A landmarks
+  "ashok nagar": { lat: 30.9280, lng: 75.8620, ward: 14, zone: "A" },
+  "govind nagar": { lat: 30.9200, lng: 75.8650, ward: 13, zone: "A" },
+  "saggu chowk": { lat: 30.9205, lng: 75.8302, ward: 65, zone: "A" },
+  "sagu chowk": { lat: 30.9205, lng: 75.8302, ward: 65, zone: "A" },
+  "hambran road": { lat: 30.9250, lng: 75.8150, ward: 65, zone: "A" },
+  "fambra": { lat: 30.9250, lng: 75.8150, ward: 65, zone: "A" },
+  "old city": { lat: 30.9150, lng: 75.8550, ward: 21, zone: "A" },
+  "mall road": { lat: 30.9050, lng: 75.8420, ward: 52, zone: "A" },
+  "rakh bagh": { lat: 30.9060, lng: 75.8440, ward: 52, zone: "A" },
+
+  // Additional Zone B landmarks
+  "brown road": { lat: 30.9160, lng: 75.8680, ward: 18, zone: "B" },
+  "cmch": { lat: 30.9160, lng: 75.8680, ward: 18, zone: "B" },
+  "christian medical college": { lat: 30.9160, lng: 75.8680, ward: 18, zone: "B" },
+  "noorwala": { lat: 30.9480, lng: 75.8700, ward: 8, zone: "B" },
+  "bajra colony": { lat: 30.9320, lng: 75.8750, ward: 9, zone: "B" },
+  "kailash nagar": { lat: 30.9320, lng: 75.8750, ward: 9, zone: "B" }
 };
 
 // Fallback City Center coordinate (MCL HQ - Zone A)
@@ -148,19 +178,19 @@ export function resolveLocation(
 ): GeoLocationResult {
   const combined = `${whereText} ${headlineText}`.toLowerCase();
 
-  // 1. Direct Regex search for Ward number: "Ward 32", "Ward No 15", "Ward-4", "ਵਾਰਡ 12", "वार्ड 34"
-  const wardRegex = /(?:ward|ward\s*no\.?|ward\s*number|ਵਾਰਡ|वार्ड)\s*[-:#]?\s*(\d{1,2})\b/i;
+  // 1. Direct Regex search for Ward number: "Ward 32", "Ward No 15", "Wards 55", "Ward-4", "ਵਾਰਡ 12", "वार्ड 34"
+  const wardRegex = /(?:wards|ward|ward\s*no\.?|ward\s*number|ਵਾਰਡ|वार्ड)\s*[-:#]?\s*(\d{1,2})\b/i;
   const match = combined.match(wardRegex);
   if (match) {
     const wardNum = parseInt(match[1], 10);
-    if (wardNum >= 1 && wardNum <= 95 && wardCentroids[String(wardNum)]) {
+    if (wardNum >= 1 && wardNum <= 95) {
       const info = wardCentroids[String(wardNum)];
       return {
-        lat: info.lat,
-        lng: info.lng,
+        lat: info ? (info.lat > 50 ? info.lng : info.lat) : MCL_HQ_COORDS.lat,
+        lng: info ? (info.lng < 50 ? info.lat : info.lng) : MCL_HQ_COORDS.lng,
         ward_no: wardNum,
         ward_name: `Ward ${wardNum}`,
-        zone: info.zone,
+        zone: info ? info.zone : "A",
         matched_name: `Ward ${wardNum}`,
         is_exact_ward: true
       };

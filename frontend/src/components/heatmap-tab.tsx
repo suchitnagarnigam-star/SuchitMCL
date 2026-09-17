@@ -106,21 +106,78 @@ export default function HeatmapTab() {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       
-      // Fetch all items across all dates and statuses
-      let itemsData: NewsItem[] = [];
+      // Fetch dispatched and news items
+      const itemsMap = new Map<string, NewsItem>();
+
+      // 1. Fetch all dispatched items (The primary source of verified, assigned grievances)
       try {
-        const itemsRes = await fetch(`${apiUrl}/news-items?date=all&status=all`);
-        if (itemsRes.ok) {
-          itemsData = await itemsRes.json();
-        } else {
-          const fallbackRes = await fetch(`${apiUrl}/news-items`);
-          if (fallbackRes.ok) {
-            itemsData = await fallbackRes.json();
+        const dispRes = await fetch(`${apiUrl}/dispatched`);
+        if (dispRes.ok) {
+          const dispData = await dispRes.json();
+          if (Array.isArray(dispData)) {
+            dispData.forEach((d: any, idx: number) => {
+              const news = d.news_item || {};
+              const id = news.id || d.news_item_id || d.id || `disp-${idx}`;
+              itemsMap.set(id, {
+                id,
+                headline: news.headline || "Civic Grievance",
+                body: news.body || "",
+                publication: news.publication || "MCL Dispatch",
+                department: news.department || "Operations & Maintenance (O&M)",
+                severity: news.severity || "Medium",
+                summary: news.summary || {},
+                page_number: news.page_number || 1,
+                status: news.status || "dispatched",
+                created_at: news.created_at || d.dispatched_at || new Date().toISOString(),
+                suggested_officer: d.officer ? {
+                  id: d.officer.id,
+                  short_code: d.officer.short_code,
+                  full_name: d.officer.full_name,
+                  designation: d.officer.designation,
+                } : (news.suggested_officer || null)
+              });
+            });
           }
         }
       } catch (e) {
-        console.warn("Error fetching items with date=all:", e);
+        console.warn("Error fetching /dispatched for GIS map:", e);
       }
+
+      // 2. Fetch desk news items (including pending items for desk view / un-dispatched toggle)
+      try {
+        const newsRes = await fetch(`${apiUrl}/news-items`);
+        if (newsRes.ok) {
+          const newsData = await newsRes.json();
+          if (Array.isArray(newsData)) {
+            newsData.forEach((item: NewsItem) => {
+              if (item.id && !itemsMap.has(item.id)) {
+                itemsMap.set(item.id, item);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("Error fetching /news-items for GIS map:", e);
+      }
+
+      // 3. Also fetch resolved if any extra
+      try {
+        const resolvedRes = await fetch(`${apiUrl}/news-items?status=resolved`);
+        if (resolvedRes.ok) {
+          const resolvedData = await resolvedRes.json();
+          if (Array.isArray(resolvedData)) {
+            resolvedData.forEach((item: NewsItem) => {
+              if (item.id && !itemsMap.has(item.id)) {
+                itemsMap.set(item.id, item);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        // silent
+      }
+
+      const itemsData = Array.from(itemsMap.values());
       setNewsItems(itemsData);
 
       // Load GeoJSON files
@@ -278,9 +335,9 @@ export default function HeatmapTab() {
 
       // 0b. Time Scope Filter (Default Month)
       if (timeScope === "month") {
-        const itemDate = item.created_at || "";
+        const itemDate = (item as any).dispatched_at || item.created_at || "";
         const nowPrefix = new Date().toISOString().slice(0, 7); // e.g. "2026-09"
-        if (!itemDate.startsWith(nowPrefix)) return false;
+        if (itemDate && !itemDate.startsWith(nowPrefix)) return false;
       }
 
       // 1. Grievance Only Filter (Default ON)
