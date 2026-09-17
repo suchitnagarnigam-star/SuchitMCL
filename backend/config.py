@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DAAK_APPSCRIPT_URL: str = ""
 
     class Config:
-        env_file = ".env"
+        env_file = (os.path.join(os.path.dirname(__file__), ".env"), ".env")
         extra = "ignore"
 
 settings = Settings()

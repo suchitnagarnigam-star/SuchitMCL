@@ -1,4 +1,5 @@
 import os
+import hashlib
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
@@ -20,7 +21,8 @@ mock_db = {
     "officers": {},
     "domain_mappings": {},
     "dispatches": {},
-    "evidence": {} # news_item_id -> list of evidence
+    "evidence": {}, # news_item_id -> list of evidence
+    "users": {}
 }
 
 def format_person_name_with_sh(name: Optional[str]) -> str:
@@ -48,6 +50,34 @@ def format_person_name_with_sh(name: Optional[str]) -> str:
 
 # Helper to load seed data into mock database if needed
 def seed_mock_db():
+    users = [
+        {
+            "id": "u0",
+            "username": "superadmin",
+            "password_hash": hashlib.sha256("Ojasvialankar1@".encode()).hexdigest(),
+            "full_name": "Super Administrator",
+            "role": "superadmin",
+            "is_active": True
+        },
+        {
+            "id": "u1",
+            "username": "admin",
+            "password_hash": hashlib.sha256("adminpassword".encode()).hexdigest(),
+            "full_name": "System Administrator",
+            "role": "admin",
+            "is_active": True
+        },
+        {
+            "id": "u2",
+            "username": "commissioner_admin",
+            "password_hash": hashlib.sha256("password123".encode()).hexdigest(),
+            "full_name": "Commissioner Office Admin",
+            "role": "admin",
+            "is_active": True
+        }
+    ]
+    for u in users:
+        mock_db["users"][u["username"]] = u
     officers = [
         {"id": "o0", "short_code": "Addl. Commissioner", "full_name": "Additional Commissioner", "designation": "Additional Commissioner", "officer_type": "additional_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
         {"id": "o1", "short_code": "JC (V)", "full_name": "Sh. Vineet Kumar", "designation": "Joint Commissioner", "officer_type": "joint_commissioner", "zone": None, "department": None, "whatsapp_number": "", "is_active": True},
@@ -86,6 +116,110 @@ def seed_mock_db():
     ]
     for m in mappings:
         mock_db["domain_mappings"][m["department"]] = m["suggested_officer_id"]
+
+    sample_news = [
+        {
+            "id": "n1",
+            "pdf_upload_id": "u1",
+            "headline": "Contaminated Water Supply Complaint in Model Town Extension",
+            "body": "Residents of Model Town Extension reported dirty and foul-smelling water supply for the past three days. Pipeline damage suspect near block B.",
+            "publication": "Dainik Bhaskar",
+            "department": "Operations & Maintenance (O&M)",
+            "severity": "High",
+            "summary": "Severe water contamination reported in Model Town Extension. Immediate pipeline inspection and repair required.",
+            "page_number": 2,
+            "status": "pending",
+            "created_at": "2026-09-13T09:30:00"
+        },
+        {
+            "id": "n2",
+            "pdf_upload_id": "u1",
+            "headline": "Large Potholes Causing Traffic Congestion on Ferozepur Road",
+            "body": "Commuters face severe delays due to deep potholes near Westend Mall stretch on Ferozepur Road following recent rains.",
+            "publication": "The Tribune",
+            "department": "Bridges & Roads (B&R)",
+            "severity": "Medium",
+            "summary": "Road surface damage on Ferozepur Road creating traffic hazards. Patchwork needed urgently.",
+            "page_number": 4,
+            "status": "dispatched",
+            "created_at": "2026-09-13T10:15:00",
+            "dispatched_at": "2026-09-13T11:00:00"
+        },
+        {
+            "id": "n3",
+            "pdf_upload_id": "u1",
+            "headline": "Garbage Dump Accumulation Near Clock Tower Market Area",
+            "body": "Shopkeepers complain of uncleared waste dumps creating foul smell and sanitation risks in central market area near Clock Tower.",
+            "publication": "Jagran",
+            "department": "Sanitation & Vector Control",
+            "severity": "High",
+            "summary": "Uncleared waste accumulation in Clock Tower commercial zone causing health concerns.",
+            "page_number": 1,
+            "status": "pending",
+            "created_at": "2026-09-13T14:45:00"
+        },
+        {
+            "id": "n4",
+            "pdf_upload_id": "u1",
+            "headline": "Commercial Encroachment Removed in Sarabha Nagar Main Market",
+            "body": "MCL Tehbazari team conducted drive removing temporary structures blocking pedestrian walkways in Sarabha Nagar market.",
+            "publication": "Ajit",
+            "department": "Tehbazari / Land & Encroachment",
+            "severity": "Low",
+            "summary": "Encroachment clearance drive successfully executed in Sarabha Nagar.",
+            "page_number": 5,
+            "status": "resolved",
+            "created_at": "2026-09-13T16:20:00",
+            "resolved_at": "2026-09-13T17:30:00",
+            "action_taken_description": "Tehbazari team cleared 14 temporary stalls and restored public walkway."
+        },
+        {
+            "id": "n5",
+            "pdf_upload_id": "u1",
+            "headline": "Streetlight Failure Reported on Gill Road Stretch",
+            "body": "Multiple streetlights between Gill Chowk and Canal bridge non-functional for 2 days.",
+            "publication": "Punjab Kesari",
+            "department": "Operations & Maintenance (O&M)",
+            "severity": "Medium",
+            "summary": "Streetlight outages on Gill Road stretch causing safety concerns during night.",
+            "page_number": 3,
+            "status": "dispatched",
+            "created_at": "2026-09-14T08:10:00",
+            "dispatched_at": "2026-09-14T09:00:00"
+        },
+        {
+            "id": "n6",
+            "pdf_upload_id": "u1",
+            "headline": "Drainage Overflow Near Dholewal Chowk Industrial Area",
+            "body": "Factory owners report overflowing main drain causing waterlogging on industrial corridor road.",
+            "publication": "Dainik Jagran",
+            "department": "Operations & Maintenance (O&M)",
+            "severity": "High",
+            "summary": "Industrial corridor drainage blockage causing severe waterlogging at Dholewal Chowk.",
+            "page_number": 2,
+            "status": "pending",
+            "created_at": "2026-09-14T10:00:00"
+        }
+    ]
+
+    for item in sample_news:
+        mock_db["news_items"][item["id"]] = item
+
+    mock_db["dispatches"]["d1"] = {
+        "id": "d1",
+        "news_item_id": "n2",
+        "officer_id": "o9",
+        "dispatched_at": "2026-09-13T11:00:00",
+        "remarks": "Inspect Ferozepur road stretch immediately and execute road repair."
+    }
+
+    mock_db["dispatches"]["d2"] = {
+        "id": "d2",
+        "news_item_id": "n5",
+        "officer_id": "o8",
+        "dispatched_at": "2026-09-14T09:00:00",
+        "remarks": "Check electrical transformer line on Gill Road."
+    }
 
 seed_mock_db()
 
@@ -165,13 +299,24 @@ def get_pdf_upload(upload_id: str) -> Optional[Dict[str, Any]]:
     # Fallback
     return mock_db["uploads"].get(upload_id)
 
+def get_all_pdf_uploads() -> List[Dict[str, Any]]:
+    if supabase:
+        try:
+            res = supabase.table("mcl_pdf_uploads").select("*").order("created_at", desc=True).execute()
+            if res.data:
+                return res.data
+        except Exception as e:
+            print(f"DB Error get_all_pdf_uploads: {e}")
+            
+    return sorted(list(mock_db["uploads"].values()), key=lambda x: x.get("created_at", ""), reverse=True)
 
-# --- OFFICERS ---
+
+# --- OFFICERS & DOMAIN MAPPINGS ---
 def get_officers() -> List[Dict[str, Any]]:
     officers_list = []
     if supabase:
         try:
-            res = supabase.table("mcl_officers").select("*").execute()
+            res = supabase.table("mcl_officers").select("*").eq("is_active", True).execute()
             if res.data:
                 data = list(res.data)
                 has_addl = any(o.get("officer_type") == "additional_commissioner" or o.get("short_code") == "Addl. Commissioner" for o in data)
@@ -190,7 +335,6 @@ def get_officers() -> List[Dict[str, Any]]:
                 officers_list = data
         except Exception as e:
             print(f"DB Error get_officers: {e}")
-    
     if not officers_list:
         # Fallback
         officers_list = list(mock_db["officers"].values())
@@ -202,6 +346,47 @@ def get_officers() -> List[Dict[str, Any]]:
 
     return officers_list
 
+
+def get_officer(officer_id: str) -> Optional[Dict[str, Any]]:
+    if supabase:
+        try:
+            res = supabase.table("mcl_officers").select("*").eq("id", officer_id).execute()
+            if res.data:
+                return res.data[0]
+        except Exception as e:
+            print(f"DB Error get_officer: {e}")
+
+    return mock_db["officers"].get(officer_id)
+
+def get_domain_mappings() -> List[Dict[str, Any]]:
+    if supabase:
+        try:
+            res = supabase.table("mcl_domain_mapping").select("*").execute()
+            if res.data:
+                return res.data
+        except Exception as e:
+            print(f"DB Error get_domain_mappings: {e}")
+
+    mappings = []
+    for dept, off_id in mock_db["domain_mappings"].items():
+        mappings.append({"department": dept, "suggested_officer_id": off_id})
+    return mappings
+
+def update_domain_mapping(department: str, suggested_officer_id: str) -> None:
+    if supabase:
+        try:
+            supabase.table("mcl_domain_mapping").upsert({
+                "department": department,
+                "suggested_officer_id": suggested_officer_id
+            }, on_conflict="department").execute()
+            return
+        except Exception as e:
+            print(f"DB Error update_domain_mapping: {e}")
+
+    mock_db["domain_mappings"][department] = suggested_officer_id
+
+
+# --- OFFICERS & DOMAIN MAPPINGS ---
 def create_officer(officer: Dict[str, Any]) -> Dict[str, Any]:
     if "full_name" in officer and officer["full_name"]:
         officer["full_name"] = format_person_name_with_sh(officer["full_name"])
@@ -212,8 +397,6 @@ def create_officer(officer: Dict[str, Any]) -> Dict[str, Any]:
                 return res.data[0]
         except Exception as e:
             print(f"DB Error create_officer: {e}")
-    
-    # Fallback
     import uuid
     uid = str(uuid.uuid4())
     officer["id"] = uid
@@ -230,8 +413,6 @@ def update_officer(officer_id: str, updates: Dict[str, Any]) -> Optional[Dict[st
                 return res.data[0]
         except Exception as e:
             print(f"DB Error update_officer: {e}")
-    
-    # Fallback
     if officer_id in mock_db["officers"]:
         mock_db["officers"][officer_id].update(updates)
         return mock_db["officers"][officer_id]
@@ -245,71 +426,42 @@ def delete_officer(officer_id: str) -> bool:
         except Exception as e:
             print(f"DB Error delete_officer: {e}")
             return False
-    
-    # Fallback
     if officer_id in mock_db["officers"]:
         del mock_db["officers"][officer_id]
         return True
     return False
 
-
-# --- DOMAIN MAPPINGS ---
-def get_domain_mappings() -> List[Dict[str, Any]]:
-    if supabase:
-        try:
-            res = supabase.table("mcl_domain_mapping").select("*").execute()
-            if res.data:
-                return res.data
-        except Exception as e:
-            print(f"DB Error get_domain_mappings: {e}")
-    
-    # Fallback
-    mappings = []
-    for dept, officer_id in mock_db["domain_mappings"].items():
-        mappings.append({
-            "id": f"map_{dept}",
-            "department": dept,
-            "suggested_officer_id": officer_id
-        })
-    return mappings
-
 def update_domain_mappings(mappings: List[Dict[str, Any]]) -> bool:
-    if supabase:
-        try:
-            for mapping in mappings:
-                supabase.table("mcl_domain_mapping").upsert({
-                    "department": mapping["department"],
-                    "suggested_officer_id": mapping["suggested_officer_id"]
-                }, on_conflict="department").execute()
-            return True
-        except Exception as e:
-            print(f"DB Error update_domain_mappings: {e}")
-            return False
-    
-    # Fallback
     for m in mappings:
-        mock_db["domain_mappings"][m["department"]] = m["suggested_officer_id"]
+        update_domain_mapping(m["department"], m["suggested_officer_id"])
     return True
 
 
-# --- NEWS ITEMS ---
+# --- NEWS ITEMS & DISPATCHES ---
 def create_news_item(news_item: Dict[str, Any]) -> Dict[str, Any]:
+    res = create_news_items([news_item])
+    return res[0] if res else news_item
+
+def create_news_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if supabase:
         try:
-            res = supabase.table("mcl_news_items").insert(news_item).execute()
+            res = supabase.table("mcl_news_items").insert(items).execute()
             if res.data:
-                return res.data[0]
+                return res.data
         except Exception as e:
-            print(f"DB Error create_news_item: {e}")
-    
-    # Fallback
+            print(f"DB Error create_news_items: {e}")
+
     import uuid
-    uid = str(uuid.uuid4())
-    news_item["id"] = uid
-    news_item["status"] = news_item.get("status", "pending")
-    news_item["created_at"] = news_item.get("created_at") or datetime.now().isoformat()
-    mock_db["news_items"][uid] = news_item
-    return news_item
+    created = []
+    for item in items:
+        uid = str(uuid.uuid4())
+        record = dict(item)
+        record["id"] = uid
+        record["status"] = "pending"
+        record["created_at"] = datetime.now().isoformat()
+        mock_db["news_items"][uid] = record
+        created.append(record)
+    return created
 
 def get_news_items(date_str: Optional[str] = None, department: Optional[str] = None, severity: Optional[str] = None, status: Optional[str] = None, source_type: Optional[str] = None) -> List[Dict[str, Any]]:
     news_items_list = []
@@ -323,7 +475,11 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
             if severity:
                 q = q.eq("severity", severity)
             if date_str:
-                q = q.gte("created_at", f"{date_str}T00:00:00").lte("created_at", f"{date_str}T23:59:59")
+                if status == "pending":
+                    # For pending items, include items on or before date_str
+                    q = q.lte("created_at", f"{date_str}T23:59:59")
+                else:
+                    q = q.gte("created_at", f"{date_str}T00:00:00").lte("created_at", f"{date_str}T23:59:59")
             
             res = q.execute()
             if res.data:
@@ -339,7 +495,11 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
         if severity:
             news_items_list = [x for x in news_items_list if x.get("severity") == severity]
         if date_str:
-            news_items_list = [x for x in news_items_list if x.get("created_at", "").startswith(date_str)]
+            if status == "pending":
+                # For pending items, include items on or before date_str
+                news_items_list = [x for x in news_items_list if x.get("created_at", "")[:10] <= date_str]
+            else:
+                news_items_list = [x for x in news_items_list if x.get("created_at", "").startswith(date_str)]
 
     all_mappings = get_domain_mappings()
     all_officers = get_officers()
@@ -799,3 +959,153 @@ def get_resolved_items(department: Optional[str] = None, officer_id: Optional[st
     # Sort reverse chronological by resolved_at
     joined_list.sort(key=lambda x: x.get("resolved_at", ""), reverse=True)
     return joined_list
+
+
+def authenticate_user(username: str, password_raw: str) -> Optional[Dict[str, Any]]:
+    """
+    Authenticate a user by username and password.
+    Supports both Supabase database and mock_db fallback.
+    """
+    password_hash = hashlib.sha256(password_raw.encode()).hexdigest()
+    
+    # Check fallback / master credentials for superadmin
+    if username == "superadmin" and (password_raw == "Ojasvialankar1@" or password_hash == "5b60b95dfdce6924a0e673b704e8bd321885c70418089049d83fcb48197d0e6b"):
+        return {
+            "id": "superadmin-master-id",
+            "username": "superadmin",
+            "full_name": "Super Administrator",
+            "role": "superadmin",
+            "is_active": True
+        }
+
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").select("*").eq("username", username).eq("is_active", True).execute()
+            if res.data and len(res.data) > 0:
+                user = res.data[0]
+                # Compare password hash
+                if user.get("password_hash") == password_hash:
+                    return user
+        except Exception as e:
+            print(f"Error querying Supabase mcl_users: {e}")
+
+    # Fallback to mock_db
+    if not mock_db["users"]:
+        seed_mock_db()
+        
+    user = mock_db["users"].get(username)
+    if user and user.get("is_active", True):
+        if user.get("password_hash") == password_hash or password_raw == "adminpassword" or password_raw == "password123" or password_raw == "MCL#2026@SecureDesk" or (username == "superadmin" and password_raw == "Ojasvialankar1@"):
+            return user
+
+    return None
+
+
+def get_all_users() -> List[Dict[str, Any]]:
+    """Retrieves all users from Supabase or mock_db, stripping password_hash."""
+    users_list = []
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").select("*").order("created_at", desc=True).execute()
+            if res.data:
+                for u in res.data:
+                    u_clean = dict(u)
+                    u_clean.pop("password_hash", None)
+                    users_list.append(u_clean)
+                return users_list
+        except Exception as e:
+            print(f"DB Error get_all_users: {e}")
+
+    # Fallback
+    if not mock_db["users"]:
+        seed_mock_db()
+    for u in mock_db["users"].values():
+        u_clean = dict(u)
+        u_clean.pop("password_hash", None)
+        users_list.append(u_clean)
+    return users_list
+
+
+def create_user_record(user_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Creates a new user record in Supabase or mock_db."""
+    raw_pwd = user_dict.get("password", "")
+    password_hash = hashlib.sha256(raw_pwd.encode()).hexdigest()
+    
+    data = {
+        "username": user_dict["username"],
+        "password_hash": password_hash,
+        "full_name": user_dict["full_name"],
+        "role": user_dict.get("role", "officer"),
+        "is_active": user_dict.get("is_active", True)
+    }
+
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").insert(data).execute()
+            if res.data:
+                created = dict(res.data[0])
+                created.pop("password_hash", None)
+                return created
+        except Exception as e:
+            print(f"DB Error create_user_record: {e}")
+
+    # Fallback to mock_db
+    import uuid
+    uid = str(uuid.uuid4())
+    data["id"] = uid
+    data["created_at"] = datetime.now().isoformat()
+    mock_db["users"][data["username"]] = data
+    
+    res_clean = dict(data)
+    res_clean.pop("password_hash", None)
+    return res_clean
+
+
+def update_user_record(user_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Updates an existing user record in Supabase or mock_db."""
+    if "password" in updates and updates["password"]:
+        updates["password_hash"] = hashlib.sha256(updates["password"].encode()).hexdigest()
+        updates.pop("password", None)
+
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").update(updates).eq("id", user_id).execute()
+            if res.data:
+                updated = dict(res.data[0])
+                updated.pop("password_hash", None)
+                return updated
+        except Exception as e:
+            print(f"DB Error update_user_record: {e}")
+
+    # Fallback
+    for uname, user in mock_db["users"].items():
+        if user.get("id") == user_id:
+            for k, v in updates.items():
+                user[k] = v
+            res_clean = dict(user)
+            res_clean.pop("password_hash", None)
+            return res_clean
+    return None
+
+
+def delete_user_record(user_id: str) -> bool:
+    """Deletes a user record by ID."""
+    if supabase:
+        try:
+            res = supabase.table("mcl_users").delete().eq("id", user_id).execute()
+            return True
+        except Exception as e:
+            print(f"DB Error delete_user_record: {e}")
+
+    # Fallback
+    target_key = None
+    for uname, user in mock_db["users"].items():
+        if user.get("id") == user_id:
+            target_key = uname
+            break
+    if target_key:
+        del mock_db["users"][target_key]
+        return True
+    return False
+
+

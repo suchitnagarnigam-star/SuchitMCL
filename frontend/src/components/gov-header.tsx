@@ -1,12 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { PunjabGovEmblem, SwachhBharatLogo, DigitalIndiaLogo, MCLLogo } from "./gov-assets";
-import { Shield, Eye, Calendar, Sparkles } from "lucide-react";
+import { Shield, Eye, Calendar, Sparkles, UserCheck, LogOut, User } from "lucide-react";
+import Link from "next/link";
 
 export default function GovTopHeader() {
   const [currentDate, setCurrentDate] = useState("");
-  const [contrastMode, setContrastMode] = useState("normal");
+  const [authUser, setAuthUser] = useState<any>(null);
 
   useEffect(() => {
+    // Check logged in user
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("mcl_auth_user");
+      if (stored) {
+        try {
+          setAuthUser(JSON.parse(stored));
+        } catch (e) {}
+      }
+    }
+
     const timer = setInterval(() => {
       const today = new Date();
       setCurrentDate(today.toLocaleDateString("en-IN", {
@@ -23,10 +34,19 @@ export default function GovTopHeader() {
     return () => clearInterval(timer);
   }, []);
 
+  const handleLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("mcl_auth_user");
+      localStorage.removeItem("mcl_auth_token");
+      setAuthUser(null);
+      window.location.href = "/login";
+    }
+  };
+
   return (
     <header className="w-full bg-white border-b border-slate-200 shadow-sm relative z-40 select-none">
-      {/* 1. Indian Flag Tri-color Strip at the very top */}
-      <div className="w-full h-1 flex">
+      {/* 1. Indian Flag Tri-color Strip at the very top (Thinner 2px strip) */}
+      <div className="w-full h-[2px] flex">
         <div className="flex-1 bg-[#FF671F]" /> {/* Saffron */}
         <div className="flex-1 bg-[#FFFFFF]" /> {/* White */}
         <div className="flex-1 bg-[#046A38]" /> {/* Green */}
@@ -44,7 +64,7 @@ export default function GovTopHeader() {
           </span>
         </div>
 
-        {/* Right: Accessibility Controls & Live Clock */}
+        {/* Right: Accessibility Controls, Live Clock & Sign In / User Status */}
         <div className="flex items-center space-x-4">
           <div className="hidden lg:flex items-center space-x-1.5 text-slate-400">
             <Calendar className="w-3.5 h-3.5" />
@@ -74,14 +94,32 @@ export default function GovTopHeader() {
               </button>
             </div>
 
-            {/* Screen Reader and Language */}
+            {/* Officer Sign In / Logged in User Bar */}
             <div className="flex items-center space-x-2 border-l border-slate-700 pl-3.5">
-              <span className="bg-slate-800 text-amber-500 font-black px-1.5 py-0.5 rounded text-[8px] tracking-wider border border-slate-700 flex items-center">
-                <Shield className="w-2.5 h-2.5 mr-0.5" />
-                SECURE
-              </span>
-              <span className="text-slate-400 font-semibold">Language:</span>
-              <span className="text-amber-500 cursor-pointer hover:text-amber-400">ENG</span>
+              {authUser ? (
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1 text-emerald-400 text-[10px]">
+                    <User className="w-3 h-3" />
+                    <span>{authUser.full_name || authUser.username}</span>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-slate-800 hover:bg-red-600 text-slate-300 hover:text-white px-2 py-0.5 rounded text-[10px] font-bold flex items-center space-x-1 transition-colors border border-slate-700"
+                    title="Log Out"
+                  >
+                    <LogOut className="w-3 h-3" />
+                    <span>LOGOUT</span>
+                  </button>
+                </div>
+              ) : (
+                <Link 
+                  href="/login"
+                  className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-2.5 py-1 rounded text-[10px] font-bold tracking-wide flex items-center space-x-1 transition-colors shadow-xs"
+                >
+                  <UserCheck className="w-3 h-3" />
+                  <span>OFFICER SIGN IN</span>
+                </Link>
+              )}
             </div>
           </div>
         </div>
