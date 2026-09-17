@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { DEPT_STYLES } from "./desk-tab";
 import { formatPersonName } from "@/lib/formatters";
+import OfficerReportModal from "./officer-report-modal";
 
 interface OfficerBreakdown {
   officer_name: string;
@@ -73,6 +74,7 @@ export default function OverviewTab() {
   const [loading, setLoading] = useState(true);
   const [timeScope, setTimeScope] = useState<"today" | "month" | "all" | "date">("month");
   const [selectedDate, setSelectedDate] = useState<string>("");
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   const fetchStats = async (scopeOverride?: "today" | "month" | "all" | "date", dateOverride?: string) => {
     setLoading(true);
@@ -582,6 +584,16 @@ export default function OverviewTab() {
             )}
           </div>
 
+          {/* Daily Officer Report Button */}
+          <button
+            onClick={() => setReportModalOpen(true)}
+            className="flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-600 text-[#0A2540] px-3 py-1 rounded-lg text-xs font-black shadow-xs transition-colors cursor-pointer"
+            title="Download daily grievance redressal report grouped by officer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Daily Officer Report</span>
+          </button>
+
           {/* Sync Button */}
           <button
             onClick={() => fetchStats()}
@@ -969,6 +981,12 @@ export default function OverviewTab() {
           {drawUrgencyChart()}
         </div>
       </div>
+
+      {/* Daily Officer Grievance Dossier Modal */}
+      <OfficerReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+      />
     </div>
   );
 }

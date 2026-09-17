@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { ChevronDown, ChevronUp, FileSpreadsheet, Search, Calendar, Filter, Clipboard, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, FileSpreadsheet, FileText, Search, Calendar, Filter, Clipboard, AlertCircle } from "lucide-react";
 import { DEPT_STYLES } from "./desk-tab";
 import { formatPersonName } from "@/lib/formatters";
+import OfficerReportModal from "./officer-report-modal";
 
 interface Officer {
   id: string;
@@ -56,6 +57,7 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
 
   // Accordion Expand states
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   // Clipboard copy tracker
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -243,19 +245,27 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
             </div>
           </div>
 
-          {/* Export to CSV Button */}
-          <div className="flex items-end">
+          {/* Export and Officer Report Buttons */}
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => setReportModalOpen(true)}
+              className="w-full flex items-center justify-center space-x-1.5 py-2.5 rounded-lg text-xs font-bold bg-[#0A2540] hover:bg-slate-850 text-white shadow-sm transition-colors cursor-pointer"
+              title="Download structured daily grievance report grouped by officer"
+            >
+              <FileText className="w-4 h-4 text-amber-400" />
+              <span>Officer Report</span>
+            </button>
             <button
               onClick={exportToCSV}
               disabled={dispatches.length === 0}
-              className={`w-full flex items-center justify-center space-x-2 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 ${
+              className={`w-full flex items-center justify-center space-x-1.5 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 ${
                 dispatches.length === 0
                   ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm cursor-pointer"
               }`}
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>Export CSV ({dispatches.length})</span>
+              <span>CSV ({dispatches.length})</span>
             </button>
           </div>
         </div>
@@ -397,6 +407,12 @@ export default function DispatchedTab({ officers }: DispatchedTabProps) {
           })}
         </div>
       )}
+
+      {/* Daily Officer Grievance Report Modal */}
+      <OfficerReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+      />
     </div>
   );
 }

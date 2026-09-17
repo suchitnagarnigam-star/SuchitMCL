@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { DEPT_STYLES } from "./desk-tab";
 import { formatPersonName, cleanInitials } from "@/lib/formatters";
+import OfficerReportModal from "./officer-report-modal";
 
 interface Evidence {
   id: string;
@@ -96,6 +97,7 @@ export default function MappingTab() {
   const [officers, setOfficers] = useState<ActiveOfficer[]>([]);
   const [selectedOfficerId, setSelectedOfficerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   // Track draft state per news item for the action panel
   const [draftActions, setDraftActions] = useState<Record<string, { status: string; description: string; isDirty: boolean }>>({});
@@ -408,13 +410,22 @@ export default function MappingTab() {
           <h2 className="text-lg font-black text-[#0A2540]">Officer Mapping & Updates</h2>
           <p className="text-xs text-slate-500">Update administrative responses and verify evidence attachments on behalf of officers</p>
         </div>
-        <button
-          onClick={() => fetchActiveOfficers(false)}
-          className="flex items-center space-x-1.5 bg-[#0A2540] hover:bg-slate-850 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Sync Registry</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setReportModalOpen(true)}
+            className="flex items-center space-x-1.5 bg-amber-500 hover:bg-amber-600 text-[#0A2540] px-3.5 py-2 rounded-lg text-xs font-black shadow-sm transition-colors cursor-pointer"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Daily Officer Report</span>
+          </button>
+          <button
+            onClick={() => fetchActiveOfficers(false)}
+            className="flex items-center space-x-1.5 bg-[#0A2540] hover:bg-slate-850 text-white px-3.5 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sync Registry</span>
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -777,6 +788,12 @@ export default function MappingTab() {
 
         </div>
       )}
+
+      {/* Daily Officer Grievance Dossier Modal */}
+      <OfficerReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+      />
     </div>
   );
 }
