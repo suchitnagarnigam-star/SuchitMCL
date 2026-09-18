@@ -913,11 +913,18 @@ def get_overview_stats(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Server-side cache for latest AI synthesis to prevent re-generating on every view
+latest_sentiment_cache: Dict[str, Any] = {
+    "ai_synthesis": None,
+    "last_synthesized_at": None,
+    "department": None
+}
+
 @app.get("/sentiment-analysis")
 def get_sentiment_analysis(
     date_str: Optional[str] = Query(None, alias="date"),
     department: Optional[str] = Query(None),
-    generate_ai: bool = Query(True)
+    generate_ai: bool = Query(False)
 ):
     """
     Computes comprehensive AI Sentiment Analysis, District Media Mood Index,
@@ -944,17 +951,25 @@ def get_sentiment_analysis(
         ]
         
         metrics = calculate_sentiment_metrics(items)
-        
         sample_headlines = [item.get("headline", "") for item in items if item.get("headline")]
         
         ai_synthesis = None
+        dept_filter = department if department and department != "All" else None
+
         if generate_ai and len(items) > 0:
             ai_synthesis = generate_ai_sentiment_synthesis(metrics, sample_headlines)
+            latest_sentiment_cache["ai_synthesis"] = ai_synthesis
+            latest_sentiment_cache["last_synthesized_at"] = datetime.now().isoformat()
+            latest_sentiment_cache["department"] = dept_filter
+        else:
+            # Return last analysis from cache if available
+            ai_synthesis = latest_sentiment_cache.get("ai_synthesis")
             
         return {
             "success": True,
             "metrics": metrics,
             "ai_synthesis": ai_synthesis,
+            "last_synthesized_at": latest_sentiment_cache.get("last_synthesized_at"),
             "queried_count": len(items)
         }
     except Exception as e:

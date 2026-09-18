@@ -86,27 +86,51 @@ interface SentimentResponse {
     discussion_topics: DiscussionTopic[];
   };
   ai_synthesis: AISynthesis | null;
+  last_synthesized_at?: string | null;
   queried_count: number;
 }
 
 export default function SentimentTab() {
   const [data, setData] = useState<SentimentResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [selectedDeptFilter, setSelectedDeptFilter] = useState("All");
   const [selectedViewTab, setSelectedViewTab] = useState<"overview" | "wards" | "domains" | "topics">("overview");
 
   // Fetch sentiment data
-  const fetchSentimentData = async (forceAI: boolean = true) => {
+  // When forceAI=false, only metrics are recomputed and last AI analysis is preserved
+  // When forceAI=true (user clicked Refresh), a fresh LLM synthesis is executed and saved
+  const fetchSentimentData = async (forceAI: boolean = false) => {
     if (forceAI) setGeneratingAI(true);
-    setLoading(true);
+    if (!data) setLoading(true);
+
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const deptParam = selectedDeptFilter !== "All" ? `&department=${encodeURIComponent(selectedDeptFilter)}` : "";
       const res = await fetch(`${apiUrl}/sentiment-analysis?date=all&generate_ai=${forceAI}${deptParam}`);
       if (res.ok) {
-        const json = await res.json();
-        setData(json);
+        const json: SentimentResponse = await res.json();
+        
+        setData(prev => {
+          // If forceAI was false, preserve existing ai_synthesis from previous state or cache
+          const effectiveAI = json.ai_synthesis || prev?.ai_synthesis || null;
+          const effectiveTime = (forceAI ? new Date().toISOString() : null) 
+                               || json.last_synthesized_at 
+                               || prev?.last_synthesized_at 
+                               || null;
+
+          const updated: SentimentResponse = {
+            ...json,
+            ai_synthesis: effectiveAI,
+            last_synthesized_at: effectiveTime
+          };
+
+          try {
+            localStorage.setItem(`mcl_sentiment_cache_${selectedDeptFilter}`, JSON.stringify(updated));
+          } catch {}
+
+          return updated;
+        });
       }
     } catch (err) {
       console.error("Failed to load sentiment analysis:", err);
@@ -116,8 +140,21 @@ export default function SentimentTab() {
     }
   };
 
+  // On tab click or filter change: load cached analysis immediately and fetch latest metrics without calling LLM
   useEffect(() => {
-    fetchSentimentData(true);
+    try {
+      const cached = localStorage.getItem(`mcl_sentiment_cache_${selectedDeptFilter}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && parsed.metrics) {
+          setData(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
+    // Only update numeric metrics in the background; do NOT re-synthesize AI on tab navigation
+    fetchSentimentData(false);
   }, [selectedDeptFilter]);
 
   const metrics = data?.metrics;
@@ -154,20 +191,24 @@ export default function SentimentTab() {
         </div>
 
         <div className="flex items-center space-x-3 self-start sm:self-auto">
+          {data?.last_synthesized_at && (
+            <div className="hidden sm:flex flex-col items-end text-[10.5px] text-slate-500 font-medium bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shadow-2xs">
+              <span className="text-slate-400 text-[9px] uppercase font-bold tracking-wider">Last AI Analysis</span>
+              <span className="text-slate-700 font-bold">
+                {new Date(data.last_synthesized_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })},{" "}
+                {new Date(data.last_synthesized_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+              </span>
+            </div>
+          )}
+
           <button
             onClick={() => fetchSentimentData(true)}
             disabled={generatingAI}
-            className="flex items-center space-x-2 bg-gradient-to-r from-[#0A2540] to-indigo-900 hover:from-slate-850 hover:to-indigo-950 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            className="flex items-center space-x-2 bg-gradient-to-r from-[#0A2540] to-indigo-900 hover:from-slate-850 hover:to-indigo-950 text-white px-4 py-2.5 rounded-lg text-xs font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer active:scale-95"
+            title="Click to run fresh AI sentiment synthesis"
           >
-            <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${generatingAI ? "animate-spin" : ""}`} />
-            <span>{generatingAI ? "Synthesizing AI Brief..." : "Re-Synthesize AI Intelligence"}</span>
-          </button>
-          <button
-            onClick={() => fetchSentimentData(false)}
-            className="flex items-center space-x-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3.5 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Refresh</span>
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${generatingAI ? "animate-spin" : ""}`} />
+            <span>{generatingAI ? "Re-Synthesizing AI..." : "Refresh & Re-Synthesize"}</span>
           </button>
         </div>
       </div>
@@ -304,7 +345,11 @@ export default function SentimentTab() {
 
           {/* Executive Summary */}
           <div className="text-xs text-slate-200 leading-relaxed font-normal bg-white/5 p-4 rounded-xl border border-white/5 space-y-2">
-            <p>{ai?.executive_summary || "Synthesizing comprehensive sentiment intelligence across all Municipal Corporation Ludhiana reports..."}</p>
+            <p>
+              {generatingAI 
+                ? "Generating real-time natural language synthesis using Gemini & Claude..." 
+                : (ai?.executive_summary || "No AI synthesis generated yet for this view. Click 'Refresh & Re-Synthesize' above to generate a full analysis.")}
+            </p>
           </div>
 
           {/* Immediate Suggested Next Steps */}
