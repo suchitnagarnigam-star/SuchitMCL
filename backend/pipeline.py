@@ -745,7 +745,15 @@ JSON output (must conform to schema with page_number set strictly to {p_num}):""
             raw_analysis = ""
             try:
                 if settings.ANTHROPIC_API_KEY:
-                    raw_analysis = call_claude(user_prompt, system_prompt)
+                    try:
+                        raw_analysis = call_claude(user_prompt, system_prompt)
+                    except Exception as claude_err:
+                        print(f"Claude API failed on Page {p_num} ({claude_err}). Attempting Gemini failover...")
+                        if get_all_gemini_keys():
+                            combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+                            raw_analysis = call_gemini_with_rotation(combined_prompt)
+                        else:
+                            raise claude_err
                 else:
                     combined_prompt = f"{system_prompt}\n\n{user_prompt}"
                     raw_analysis = call_gemini_with_rotation(combined_prompt)

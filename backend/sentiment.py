@@ -420,7 +420,14 @@ Respond ONLY with valid JSON. Do not wrap in markdown quotes if possible."""
         from backend.pipeline import call_claude, call_gemini_with_rotation
         raw_resp = ""
         if settings.ANTHROPIC_API_KEY:
-            raw_resp = call_claude(prompt)
+            try:
+                raw_resp = call_claude(prompt)
+            except Exception as claude_err:
+                print(f"Claude sentiment synthesis failed ({claude_err}). Attempting Gemini failover...")
+                if settings.GEMINI_API_KEY_1 or settings.GEMINI_API_KEY_2 or settings.GEMINI_API_KEY_3:
+                    raw_resp = call_gemini_with_rotation(prompt)
+                else:
+                    raise claude_err
         elif settings.GEMINI_API_KEY_1 or settings.GEMINI_API_KEY_2 or settings.GEMINI_API_KEY_3:
             raw_resp = call_gemini_with_rotation(prompt)
 
