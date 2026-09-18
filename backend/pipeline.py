@@ -170,6 +170,14 @@ def call_gemini_with_rotation(prompt: str) -> str:
     if not keys:
         raise ValueError("No GEMINI_API_KEY configured. Please check your environment variables.")
 
+    GEMINI_CANDIDATE_MODELS = [
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
+        "gemini-2.0-flash"
+    ]
+
     # Try each key in order of rotation
     last_error = None
     for attempt in range(len(keys) * 2):  # Try keys twice in case of transient glitches
@@ -177,7 +185,6 @@ def call_gemini_with_rotation(prompt: str) -> str:
         if not key:
             continue
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
         payload = {
             "contents": [
                 {
@@ -191,37 +198,42 @@ def call_gemini_with_rotation(prompt: str) -> str:
             }
         }
 
-        try:
-            print(f"Sending request to Gemini using rotated key (attempt {attempt + 1})...")
-            with httpx.Client(timeout=60.0) as client:
-                resp = client.post(url, json=payload)
-                
-                # Check for rate limit
-                if resp.status_code == 429:
-                    print(f"Key rate limited (429). Rotating to next key.")
-                    last_error = "Rate Limit (429)"
-                    continue
-                
-                if resp.status_code != 200:
-                    print(f"Gemini API returned status {resp.status_code}: {resp.text}")
-                    last_error = f"HTTP {resp.status_code}: {resp.text}"
-                    continue
+        for model_name in GEMINI_CANDIDATE_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+            try:
+                print(f"Sending request to Gemini ({model_name}) using rotated key (attempt {attempt + 1})...")
+                with httpx.Client(timeout=60.0) as client:
+                    resp = client.post(url, json=payload)
+                    
+                    # Check for rate limit
+                    if resp.status_code == 429:
+                        print(f"Key rate limited (429) on {model_name}. Rotating to next key.")
+                        last_error = "Rate Limit (429)"
+                        break  # Rotate key
+                    
+                    # Model not found / deprecated for this API tier, try next candidate
+                    if resp.status_code == 404:
+                        continue
 
-                # Parse response
-                result = resp.json()
-                candidates = result.get("candidates", [])
-                if candidates:
-                    content = candidates[0].get("content", {})
-                    parts = content.get("parts", [])
-                    if parts:
-                        return parts[0].get("text", "")
-                
-                raise Exception(f"Invalid response structure from Gemini: {result}")
-        except Exception as e:
-            print(f"Error calling Gemini with key: {e}")
-            last_error = str(e)
-            # Pause briefly and rotate
-            time.sleep(0.5)
+                    if resp.status_code != 200:
+                        print(f"Gemini API returned status {resp.status_code} for {model_name}: {resp.text[:120]}")
+                        last_error = f"HTTP {resp.status_code}: {resp.text}"
+                        continue
+
+                    # Parse response
+                    result = resp.json()
+                    candidates = result.get("candidates", [])
+                    if candidates:
+                        content = candidates[0].get("content", {})
+                        parts = content.get("parts", [])
+                        if parts:
+                            return parts[0].get("text", "")
+                    
+                    raise Exception(f"Invalid response structure from Gemini: {result}")
+            except Exception as e:
+                print(f"Error calling Gemini ({model_name}) with key: {e}")
+                last_error = str(e)
+                time.sleep(0.3)
 
     raise Exception(f"All Gemini keys exhausted. Last error: {last_error}")
 
