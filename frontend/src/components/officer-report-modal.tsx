@@ -124,6 +124,7 @@ export function generateSingleOfficerPdf(group: { officer: any; items: any[] }, 
   const tableData = group.items.map((it: any, idx: number) => [
     String(idx + 1),
     it.details.department || "General",
+    it.details.areaWard || "Ludhiana",
     it.details.subject || "Civic Grievance",
     it.details.summary || "Not specified",
     it.details.senderInfo || "Citizen Complaint",
@@ -132,7 +133,7 @@ export function generateSingleOfficerPdf(group: { officer: any; items: any[] }, 
 
   autoTable(doc, {
     startY: 104,
-    head: [["Sr. no", "Department", "Subject", "Summary", "Sender Information", "Source"]],
+    head: [["Sr. no", "Department", "Area / Ward", "Subject", "Summary", "Sender Information", "Source"]],
     body: tableData,
     theme: "grid",
     headStyles: {
@@ -144,12 +145,13 @@ export function generateSingleOfficerPdf(group: { officer: any; items: any[] }, 
       cellPadding: 5
     },
     columnStyles: {
-      0: { cellWidth: 35, halign: "center", fontStyle: "bold" },
-      1: { cellWidth: 100, fontSize: 8 },
-      2: { cellWidth: 155, fontSize: 8.5, fontStyle: "bold" },
-      // Column 3 (Summary) uses auto distribution
-      4: { cellWidth: 130, fontSize: 7.5 },
-      5: { cellWidth: 85, fontSize: 8 }
+      0: { cellWidth: 30, halign: "center", fontStyle: "bold" },
+      1: { cellWidth: 95, fontSize: 8 },
+      2: { cellWidth: 80, fontSize: 8, fontStyle: "bold" },
+      3: { cellWidth: 140, fontSize: 8.5, fontStyle: "bold" },
+      // Column 4 (Summary) uses auto distribution
+      5: { cellWidth: 125, fontSize: 7.5 },
+      6: { cellWidth: 80, fontSize: 8 }
     },
     styles: {
       fontSize: 8,
@@ -240,6 +242,31 @@ export default function OfficerReportModal({
       summaryText = news.body;
     }
 
+    // Extract Area / Ward
+    let areaWard = "";
+    if (typeof summary === "object" && summary !== null) {
+      if (summary.where && summary.where !== "Not specified" && summary.where !== "Ludhiana") {
+        areaWard = summary.where;
+      }
+    }
+    if (!areaWard) {
+      const textToScan = `${news.headline || ""} ${news.body || ""}`;
+      const wardMatch = textToScan.match(/\b(?:ward|ward\s*no\.?|ward\s*number)\s*(\d+)\b/i);
+      if (wardMatch) {
+        areaWard = `Ward ${wardMatch[1]}`;
+      } else {
+        const localities = [
+          "Ghumar Mandi", "Model Town", "Sarabha Nagar", "BRS Nagar", "Civil Lines",
+          "Ferozepur Road", "Gill Road", "Rahon Road", "Tajpur Road", "Haibowal",
+          "Dugri", "Chandigarh Road", "Jalandhar Bypass", "Old City", "Chaura Bazar",
+          "Giaspura", "Dashmesh Nagar", "Ambedkar Nagar", "Harwinder Nagar", "Makkar Colony",
+          "Punjabi Bagh", "Pindi Street", "Focal Point", "Dholewal"
+        ];
+        const found = localities.find(loc => textToScan.toLowerCase().includes(loc.toLowerCase()));
+        areaWard = found || (typeof summary === "object" && summary?.where ? summary.where : "Ludhiana");
+      }
+    }
+
     // Sender Information
     let senderInfo = "Citizen Complaint";
     const isDaak = summary.source_type === "daak" || news.publication?.toLowerCase().includes("daak");
@@ -251,11 +278,7 @@ export default function OfficerReportModal({
       else if (summary.diary_no) parts.push(`Ref: ${summary.diary_no}`);
       senderInfo = parts.length > 0 ? parts.join(" | ") : "Citizen Daak / Email Grievance";
     } else {
-      const locality = summary.where && summary.where !== "Not specified" ? summary.where : "";
-      senderInfo = locality ? `Locality: ${locality}` : "Public Media Report";
-      if (news.page_number) {
-        senderInfo += ` (p. ${news.page_number})`;
-      }
+      senderInfo = news.page_number ? `Press Media (p. ${news.page_number})` : "Public Media Report";
     }
 
     // Source
@@ -266,6 +289,7 @@ export default function OfficerReportModal({
 
     return {
       department: news.department || "Operations & Maintenance (O&M)",
+      areaWard: areaWard || "Ludhiana",
       subject: news.headline || "Civic Grievance",
       summary: summaryText,
       senderInfo,
@@ -414,12 +438,13 @@ export default function OfficerReportModal({
         const off = group.officer;
         const rows = group.items.map((item, idx) => `
           <tr style="page-break-inside: avoid;">
-            <td style="border:1px solid #cbd5e1; padding:6px; text-align:center; font-weight:bold; width:35px;">${idx + 1}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; font-size:10.5px; width:120px;">${item.details.department}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:700; font-size:11px; width:180px; color:#0f172a;">${item.details.subject}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; text-align:center; font-weight:bold; width:30px;">${idx + 1}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:600; font-size:10.5px; width:110px;">${item.details.department}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:700; font-size:10.5px; width:95px; color:#1e293b;">${item.details.areaWard}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-weight:700; font-size:11px; width:170px; color:#0f172a;">${item.details.subject}</td>
             <td style="border:1px solid #cbd5e1; padding:6px; font-size:10.5px; line-height:1.4; color:#334155;">${item.details.summary}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10px; width:140px; color:#475569;">${item.details.senderInfo}</td>
-            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10px; width:100px; font-weight:600; color:#0369a1;">${item.details.source}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10px; width:130px; color:#475569;">${item.details.senderInfo}</td>
+            <td style="border:1px solid #cbd5e1; padding:6px; font-size:10px; width:90px; font-weight:600; color:#0369a1;">${item.details.source}</td>
           </tr>
         `).join("");
 
@@ -443,12 +468,13 @@ export default function OfficerReportModal({
             <table style="width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 10.5px; margin-bottom: 8px;">
               <thead>
                 <tr style="background-color: #0a2540; color: #ffffff; page-break-inside: avoid;">
-                  <th style="border:1px solid #0a2540; padding:6px; text-align:center;">Sr. no</th>
-                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Department</th>
-                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Subject</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:center; width:30px;">Sr. no</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left; width:110px;">Department</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left; width:95px;">Area / Ward</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left; width:170px;">Subject</th>
                   <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Summary</th>
-                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Sender Information</th>
-                  <th style="border:1px solid #0a2540; padding:6px; text-align:left;">Source</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left; width:130px;">Sender Information</th>
+                  <th style="border:1px solid #0a2540; padding:6px; text-align:left; width:90px;">Source</th>
                 </tr>
               </thead>
               <tbody>
@@ -588,16 +614,17 @@ export default function OfficerReportModal({
     groupedByOfficer.forEach(group => {
       const off = group.officer;
       lines.push(`"Name of officer = ${off.full_name} (${off.short_code}) - ${off.designation || ''}"`);
-      lines.push(`"Sr. no","Department","Subject","Summary","Sender Information","Source"`);
+      lines.push(`"Sr. no","Department","Area / Ward","Subject","Summary","Sender Information","Source"`);
 
       group.items.forEach((it, idx) => {
         const cleanSr = `"${idx + 1}"`;
         const cleanDept = `"${(it.details.department || '').replace(/"/g, '""')}"`;
+        const cleanArea = `"${(it.details.areaWard || 'Ludhiana').replace(/"/g, '""')}"`;
         const cleanSubj = `"${(it.details.subject || '').replace(/"/g, '""')}"`;
         const cleanSumm = `"${(it.details.summary || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
         const cleanSender = `"${(it.details.senderInfo || '').replace(/"/g, '""')}"`;
         const cleanSource = `"${(it.details.source || '').replace(/"/g, '""')}"`;
-        lines.push([cleanSr, cleanDept, cleanSubj, cleanSumm, cleanSender, cleanSource].join(","));
+        lines.push([cleanSr, cleanDept, cleanArea, cleanSubj, cleanSumm, cleanSender, cleanSource].join(","));
       });
 
       lines.push("");
@@ -631,6 +658,7 @@ export default function OfficerReportModal({
         <tr>
           <td style="border:1px solid #94a3b8; padding:6px; text-align:center;">${idx + 1}</td>
           <td style="border:1px solid #94a3b8; padding:6px; font-weight:bold;">${it.details.department}</td>
+          <td style="border:1px solid #94a3b8; padding:6px; font-weight:bold; color:#0f172a;">${it.details.areaWard}</td>
           <td style="border:1px solid #94a3b8; padding:6px; font-weight:bold; color:#0a2540;">${it.details.subject}</td>
           <td style="border:1px solid #94a3b8; padding:6px;">${it.details.summary}</td>
           <td style="border:1px solid #94a3b8; padding:6px;">${it.details.senderInfo}</td>
@@ -647,11 +675,12 @@ export default function OfficerReportModal({
             <thead>
               <tr style="background:#f1f5f9; color:#0a2540;">
                 <th style="border:1px solid #94a3b8; padding:6px; width:45px;">Sr. no</th>
-                <th style="border:1px solid #94a3b8; padding:6px; width:130px;">Department</th>
-                <th style="border:1px solid #94a3b8; padding:6px; width:180px;">Subject</th>
+                <th style="border:1px solid #94a3b8; padding:6px; width:120px;">Department</th>
+                <th style="border:1px solid #94a3b8; padding:6px; width:100px;">Area / Ward</th>
+                <th style="border:1px solid #94a3b8; padding:6px; width:170px;">Subject</th>
                 <th style="border:1px solid #94a3b8; padding:6px;">Summary</th>
-                <th style="border:1px solid #94a3b8; padding:6px; width:150px;">Sender Information</th>
-                <th style="border:1px solid #94a3b8; padding:6px; width:110px;">Source</th>
+                <th style="border:1px solid #94a3b8; padding:6px; width:140px;">Sender Information</th>
+                <th style="border:1px solid #94a3b8; padding:6px; width:100px;">Source</th>
               </tr>
             </thead>
             <tbody>
@@ -927,12 +956,13 @@ export default function OfficerReportModal({
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-[#0A2540]/5 text-[#0A2540] border-b border-slate-200 font-black text-[11px]">
-                          <th className="py-2.5 px-3 text-center w-14">Sr. no</th>
-                          <th className="py-2.5 px-3 w-44">Department</th>
-                          <th className="py-2.5 px-3 w-64">Subject</th>
+                          <th className="py-2.5 px-3 text-center w-12">Sr. no</th>
+                          <th className="py-2.5 px-3 w-40">Department</th>
+                          <th className="py-2.5 px-3 w-32">Area / Ward</th>
+                          <th className="py-2.5 px-3 w-56">Subject</th>
                           <th className="py-2.5 px-3">Summary</th>
-                          <th className="py-2.5 px-3 w-48">Sender Information</th>
-                          <th className="py-2.5 px-3 w-36">Source</th>
+                          <th className="py-2.5 px-3 w-44">Sender Information</th>
+                          <th className="py-2.5 px-3 w-32">Source</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-150">
@@ -952,6 +982,11 @@ export default function OfficerReportModal({
                                     Urgent High
                                   </span>
                                 )}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="font-bold text-slate-800 text-[11px] block">
+                                  {item.details.areaWard}
+                                </span>
                               </td>
                               <td className="py-2.5 px-3">
                                 <p className="font-bold text-slate-900 leading-snug">
