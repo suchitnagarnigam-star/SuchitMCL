@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     GOOGLE_SHEET_WEBHOOK_URL: str = ""
     GOOGLE_SHEET_ID: str = ""
     GOOGLE_SHEET_TAB_NAME: str = "Sheet1"
-    DAAK_APPSCRIPT_URL: str = ""
+    DAAK_APPSCRIPT_URL: str = "https://script.google.com/macros/s/AKfycbx-k0qVOj8T9kT_zqAyQ8pZpaFpFO9JqusFKdudH8dqEg5T7nTk4Seg-H1r8aWK79jHkA/exec"
 
     class Config:
         env_file = (os.path.join(os.path.dirname(__file__), ".env"), ".env")

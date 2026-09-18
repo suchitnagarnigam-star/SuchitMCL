@@ -379,6 +379,8 @@ function DetailPane({
   );
 }
 
+const DEFAULT_DAAK_URL = "https://script.google.com/macros/s/AKfycbx-k0qVOj8T9kT_zqAyQ8pZpaFpFO9JqusFKdudH8dqEg5T7nTk4Seg-H1r8aWK79jHkA/exec";
+
 export default function DeskTab({ officers }: DeskTabProps) {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -398,7 +400,7 @@ export default function DeskTab({ officers }: DeskTabProps) {
   // Daak Sync State
   const [isSyncingDaak, setIsSyncingDaak] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
-  const [appscriptUrlInput, setAppscriptUrlInput] = useState("");
+  const [appscriptUrlInput, setAppscriptUrlInput] = useState(DEFAULT_DAAK_URL);
   const [syncFeedback, setSyncFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const [activeDispatchItem, setActiveDispatchItem] = useState<NewsItem | null>(null);
@@ -422,12 +424,19 @@ export default function DeskTab({ officers }: DeskTabProps) {
     });
   };
 
-  // Load saved Apps Script URL
+  // Load saved Apps Script URL or initialize with verified default
   useEffect(() => {
     try {
       const saved = localStorage.getItem("daak_appscript_url");
-      if (saved) setAppscriptUrlInput(saved);
-    } catch {}
+      if (saved && saved.trim()) {
+        setAppscriptUrlInput(saved.trim());
+      } else {
+        setAppscriptUrlInput(DEFAULT_DAAK_URL);
+        localStorage.setItem("daak_appscript_url", DEFAULT_DAAK_URL);
+      }
+    } catch {
+      setAppscriptUrlInput(DEFAULT_DAAK_URL);
+    }
   }, []);
 
   const fetchNewsItems = async () => {
@@ -455,16 +464,22 @@ export default function DeskTab({ officers }: DeskTabProps) {
     setSyncFeedback(null);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const urlToUse = overrideUrl || appscriptUrlInput.trim();
+      const urlToUse = overrideUrl || appscriptUrlInput.trim() || DEFAULT_DAAK_URL;
       const queryParam = urlToUse ? `?url=${encodeURIComponent(urlToUse)}` : "";
       
       const res = await fetch(`${apiUrl}/daak/sync${queryParam}`, {
         method: "POST"
       });
       
-      const result = await res.json();
+      let result: any = {};
+      try {
+        result = await res.json();
+      } catch {
+        result = {};
+      }
+
       if (!res.ok || !result.success) {
-        throw new Error(result.detail || result.message || "Failed to sync Daak");
+        throw new Error(result.detail || result.message || `Server returned HTTP ${res.status}: Failed to sync Daak`);
       }
       
       setSyncFeedback({
@@ -1494,9 +1509,25 @@ export default function DeskTab({ officers }: DeskTabProps) {
             {/* Modal Body */}
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Apps Script Web App URL (Optional if configured in backend .env)
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Apps Script Web App URL
+                  </label>
+                  {appscriptUrlInput !== DEFAULT_DAAK_URL && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppscriptUrlInput(DEFAULT_DAAK_URL);
+                        try {
+                          localStorage.setItem("daak_appscript_url", DEFAULT_DAAK_URL);
+                        } catch {}
+                      }}
+                      className="text-[10.5px] text-purple-700 hover:text-purple-900 font-bold hover:underline"
+                    >
+                      Reset to Default URL
+                    </button>
+                  )}
+                </div>
                 <input
                   type="url"
                   placeholder="https://script.google.com/macros/s/.../exec"

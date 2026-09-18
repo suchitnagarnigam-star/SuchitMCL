@@ -974,3 +974,44 @@ def cleanup_duplicates(dry_run: bool = Query(False)):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- CITIZEN DAAK INGESTION PIPELINE ---
+
+@app.post("/daak/sync")
+@app.get("/daak/sync")
+def sync_daak(url: Optional[str] = Query(None)):
+    """
+    Pulls and ingests citizen Daak grievance petitions from the Google Apps Script Web App.
+    Respects the 15/09/2026 cutoff and targets that day's Commissioner's Desk using 'Processed At'.
+    """
+    try:
+        from backend.daak import fetch_daak_from_appscript, process_and_ingest_daak_rows
+        target_url = url or settings.DAAK_APPSCRIPT_URL
+        if not target_url:
+            raise HTTPException(
+                status_code=400,
+                detail="Daak Google Apps Script URL not configured in settings or provided via query parameter."
+            )
+
+        rows = fetch_daak_from_appscript(target_url)
+        result = process_and_ingest_daak_rows(rows)
+        return {
+            "success": True,
+            "message": f"Daak sync complete: {result['synced_count']} new items ingested, {result['skipped_count']} historical/duplicate items skipped.",
+            "details": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/daak/status")
+def daak_status():
+    """
+    Returns current configuration status of the citizen Daak pipeline.
+    """
+    return {
+        "configured_url": settings.DAAK_APPSCRIPT_URL,
+        "is_configured": bool(settings.DAAK_APPSCRIPT_URL),
+        "cutoff_date": "15/09/2026"
+    }
