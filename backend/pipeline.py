@@ -11,7 +11,7 @@ from pypdf import PdfReader
 from PIL import Image
 
 # Import configurations and db
-from backend.config import settings, get_all_gemini_keys, get_next_gemini_key
+from backend.config import settings, get_all_gemini_keys, get_next_gemini_key, get_all_mistral_keys
 from backend.database import update_pdf_upload, create_news_item, get_domain_mappings, get_officers
 
 # Try importing PyMuPDF (fitz) or pdf2image for OCR page-to-image conversion.
@@ -103,17 +103,14 @@ def split_ocr_text_by_page(ocr_text: str) -> List[Tuple[int, str]]:
     return pages
 
 
-def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
+_mistral_key_index = 0
+ 
+def _execute_mistral_ocr(img_bytes: bytes, filename: str, api_key: str) -> str:
     """
-    Uploads an image to Mistral files API and runs OCR processing.
-    Includes retries on HTTP 429.
-    Returns the extracted markdown text.
+    Executes a single Mistral OCR attempt (file upload + OCR request + cleanup)
+    using the provided API key.
     """
-    if not settings.MISTRAL_API_KEY:
-        raise ValueError("MISTRAL_API_KEY not configured.")
-
-    headers = {"Authorization": f"Bearer {settings.MISTRAL_API_KEY}"}
-
+    headers = {"Authorization": f"Bearer {api_key}"}
     files = {
         "file": (filename, img_bytes, "image/jpeg"),
         "purpose": (None, "ocr")
@@ -121,6 +118,7 @@ def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
 
     file_id = None
     with httpx.Client(timeout=60.0) as client:
+        # Step 1: Upload the page image to Mistral Files API
         for attempt in range(2):
             upload_resp = client.post(
                 "https://api.mistral.ai/v1/files",
@@ -128,18 +126,19 @@ def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
                 files=files
             )
             if upload_resp.status_code == 429:
-                wait_s = 2 * (attempt + 1)
-                print(f"Mistral File Upload 429 rate limited. Waiting {wait_s}s (attempt {attempt + 1})...")
-                time.sleep(wait_s)
-                continue
+                if attempt == 0:
+                    time.sleep(1.5)
+                    continue
+                raise Exception(f"Mistral File Upload 429 Rate Limit Exceeded: {upload_resp.text}")
             if upload_resp.status_code != 200:
                 raise Exception(f"Mistral File Upload failed ({upload_resp.status_code}): {upload_resp.text}")
             file_id = upload_resp.json().get("id")
             break
 
         if not file_id:
-            raise Exception("Mistral File Upload failed: 429 Rate Limit Exceeded.")
+            raise Exception("Mistral File Upload failed: No file_id returned.")
 
+        # Step 2: Request OCR extraction from Mistral OCR endpoint
         try:
             ocr_payload = {
                 "model": "mistral-ocr-latest",
@@ -156,10 +155,10 @@ def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
                     json=ocr_payload
                 )
                 if ocr_resp.status_code == 429:
-                    wait_s = 3 * (attempt + 1)
-                    print(f"Mistral OCR 429 rate limited. Waiting {wait_s}s (attempt {attempt + 1})...")
-                    time.sleep(wait_s)
-                    continue
+                    if attempt == 0:
+                        time.sleep(2.0)
+                        continue
+                    raise Exception(f"Mistral OCR 429 Rate Limit Exceeded: {ocr_resp.text}")
                 break
 
             if not ocr_resp or ocr_resp.status_code != 200:
@@ -173,10 +172,52 @@ def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
             return "\n\n".join(page.get("markdown", "") for page in pages)
 
         finally:
-            try:
-                client.delete(f"https://api.mistral.ai/v1/files/{file_id}", headers=headers)
-            except Exception:
-                pass
+            if file_id:
+                try:
+                    client.delete(f"https://api.mistral.ai/v1/files/{file_id}", headers=headers)
+                except Exception:
+                    pass
+
+
+def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
+    """
+    Uploads an image to Mistral files API and runs OCR processing.
+    Includes multi-key rotation and automatic fallback when HTTP 429 (rate limit)
+    or other API errors occur.
+    Returns the extracted markdown text.
+    """
+    global _mistral_key_index
+    keys = get_all_mistral_keys()
+    if not keys:
+        raise ValueError("No Mistral API keys configured.")
+
+    num_keys = len(keys)
+    last_err = None
+    start_idx = _mistral_key_index
+
+    for i in range(num_keys):
+        idx = (start_idx + i) % num_keys
+        key = keys[idx]
+        masked = f"{key[:6]}...{key[-4:]}" if len(key) > 10 else "***"
+        try:
+            text = _execute_mistral_ocr(img_bytes, filename, key)
+            # If successful, keep this key active for subsequent pages
+            _mistral_key_index = idx
+            return text
+        except Exception as e:
+            err_msg = str(e)
+            last_err = e
+            if num_keys > 1:
+                next_idx = (start_idx + i + 1) % num_keys
+                next_key = keys[next_idx]
+                next_masked = f"{next_key[:6]}...{next_key[-4:]}" if len(next_key) > 10 else "***"
+                print(f"[Mistral OCR] Key {idx+1}/{num_keys} ({masked}) failed ({err_msg[:90]}). Falling back to key {next_idx+1}/{num_keys} ({next_masked})...")
+                # Advance active index so future calls don't restart with the failing key
+                _mistral_key_index = next_idx
+            else:
+                print(f"[Mistral OCR] Key {idx+1}/{num_keys} ({masked}) failed: {err_msg[:90]}")
+
+    raise last_err or Exception("All Mistral OCR keys failed.")
 
 
 def call_gemini_vision_ocr(img_bytes: bytes, page_num: int = 1) -> str:
@@ -620,6 +661,7 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                     del page
                 except Exception as render_err:
                     print(f"PyMuPDF render failed on page {page_num}: {render_err}")
+                    ocr_errors.append(f"PyMuPDF render error: {render_err}")
 
             if not img_bytes and PDF2IMAGE_AVAILABLE:
                 try:
@@ -642,19 +684,22 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                         img_bytes = img_byte_arr.getvalue()
                 except Exception as render_err:
                     print(f"pdf2image render failed on page {page_num}: {render_err}")
+                    ocr_errors.append(f"pdf2image render error: {render_err}")
 
             # 2. Extract OCR from rendered page image
             if img_bytes:
-                # Primary OCR: Mistral OCR (with automatic 429 backoff)
-                if settings.MISTRAL_API_KEY:
+                # Primary OCR: Mistral OCR (with multi-key rotation and automatic 429 fallback)
+                if get_all_mistral_keys():
                     try:
                         page_text = call_mistral_ocr(img_bytes, f"page_{page_num}.jpg")
                         if page_text and len(page_text.strip()) >= 30:
                             method_desc = "OCR processed via Mistral"
                     except Exception as mistral_err:
-                        print(f"Mistral OCR failed on page {page_num} ({mistral_err}). Trying Gemini Vision fallback...")
+                        err_str = str(mistral_err)
+                        print(f"Mistral OCR failed on page {page_num} ({err_str}). Trying fallback...")
+                        ocr_errors.append(f"Mistral OCR error: {err_str}")
                         update_pdf_upload(upload_id, {
-                            "progress_log": f"Page {page_num}: Mistral OCR unavailable ({str(mistral_err)[:50]}). Triggering Gemini Vision fallback..."
+                            "progress_log": f"Page {page_num}: Mistral OCR unavailable ({err_str[:50]}). Checking fallback..."
                         })
                         page_text = ""
 
@@ -666,6 +711,7 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                             method_desc = "OCR processed via Gemini Vision (fallback)"
                     except Exception as gemini_err:
                         print(f"Gemini Vision OCR failed for page {page_num}: {gemini_err}")
+                        ocr_errors.append(f"Gemini Vision OCR error: {gemini_err}")
                         update_pdf_upload(upload_id, {
                             "progress_log": f"Page {page_num}: Gemini Vision OCR error: {str(gemini_err)[:60]}"
                         })
@@ -724,10 +770,17 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                     "PyMuPDF is not installed, and Poppler was not found. Install PyMuPDF (recommended), "
                     "or install Poppler and set POPPLER_PATH."
                 )
-            elif not settings.MISTRAL_API_KEY:
-                poppler_hint = "MISTRAL_API_KEY is not configured, so scanned PDF OCR cannot run."
+            elif not get_all_mistral_keys():
+                poppler_hint = "No Mistral API key is configured, so scanned PDF OCR cannot run."
             elif ocr_errors:
-                poppler_hint = f"OCR conversion/API failed. Last OCR error: {ocr_errors[-1]}"
+                last_err = ocr_errors[-1]
+                if "429" in last_err or "Rate Limit" in last_err or "rate_limited" in last_err:
+                    poppler_hint = (
+                        f"Mistral OCR 429 rate limit exceeded on all configured keys ({last_err[:120]}). "
+                        "Note: mistral-ocr-latest requires a payment method or credits activated in console.mistral.ai."
+                    )
+                else:
+                    poppler_hint = f"OCR conversion/API failed. Last OCR error: {last_err}"
             else:
                 poppler_hint = "Upload a text-searchable PDF or check the scanned PDF quality."
             raise ValueError(

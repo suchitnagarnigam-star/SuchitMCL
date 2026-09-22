@@ -5,6 +5,8 @@ import itertools
 
 class Settings(BaseSettings):
     MISTRAL_API_KEY: str = ""
+    MISTRAL_API_KEY_1: str = ""
+    MISTRAL_API_KEY_2: str = ""
     GEMINI_API_KEY_1: str = ""
     GEMINI_API_KEY_2: str = ""
     GEMINI_API_KEY_3: str = ""
@@ -24,7 +26,23 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 settings = Settings()
-
+ 
+def get_all_mistral_keys() -> List[str]:
+    candidate_keys = [
+        settings.MISTRAL_API_KEY_1,
+        settings.MISTRAL_API_KEY,
+        settings.MISTRAL_API_KEY_2,
+        os.getenv("MISTRAL_API_KEY_1", ""),
+        os.getenv("MISTRAL_API_KEY", ""),
+        os.getenv("MISTRAL_API_KEY_2", ""),
+    ]
+    resolved = []
+    for k in candidate_keys:
+        clean = (k or "").strip()
+        if clean and clean not in resolved and not clean.startswith("your_"):
+            resolved.append(clean)
+    return resolved
+ 
 def get_all_gemini_keys() -> List[str]:
     candidate_keys = [
         settings.GEMINI_API_KEY_1,
