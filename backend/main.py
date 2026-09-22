@@ -32,10 +32,16 @@ def health_check():
     Health check endpoint for Railway and external uptime monitors.
     Returns 200 OK immediately so deployment health checks succeed.
     """
+    from backend.config import get_all_mistral_keys
+    keys = get_all_mistral_keys()
+    masked_keys = [f"{k[:6]}...{k[-4:]}" for k in keys]
     return {
         "status": "healthy",
         "service": "Suchit Nagar Nigam API (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "mistral_keys_count": len(keys),
+        "mistral_keys": masked_keys,
+        "commit": "check-keys-v1"
     }
 
 
