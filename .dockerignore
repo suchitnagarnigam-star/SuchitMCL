@@ -1,0 +1,43 @@
+# Ignore Git and IDE metadata
+.git
+.gitignore
+.github
+.agents
+.gemini
+.kilo
+.vscode
+.idea
+
+# Ignore Virtual Environments
+.venv
+.venv-1
+venv
+ENV
+env
+
+# Ignore Frontend (deployed separately or not needed by backend container)
+frontend
+node_modules
+
+# Ignore Heavy Local Tools & Archives
+tools
+scratch
+*.zip
+*.rar
+*.tar.gz
+Ludhiana_Boundary _ward_MC
+Ludhiana_Boundary _ward_MC.rar
+
+# Ignore Python Caches
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+
+# Ignore Documentation & Bat scripts
+README.md
+design.md
+dev.bat
+start_dev.sh
+google_apps_script_daak.js

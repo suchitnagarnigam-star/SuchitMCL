@@ -607,15 +607,17 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                     rect = page.rect
                     width = rect.width
                     if width > 0:
-                        scale = 150.0 / 72.0
-                        if width * scale > 1200:
-                            scale = 1200.0 / width
+                        scale = 120.0 / 72.0
+                        if width * scale > 1000:
+                            scale = 1000.0 / width
                         mat = fitz.Matrix(scale, scale)
                         pix = page.get_pixmap(matrix=mat)
                     else:
-                        pix = page.get_pixmap(dpi=150)
+                        pix = page.get_pixmap(dpi=120)
                     
                     img_bytes = pix.tobytes("jpeg")
+                    del pix
+                    del page
                 except Exception as render_err:
                     print(f"PyMuPDF render failed on page {page_num}: {render_err}")
 
@@ -692,6 +694,12 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
             update_pdf_upload(upload_id, {
                 "progress_log": f"Page {page_num} of {total_pages} completed - {method_desc}."
             })
+
+            # Release image buffers immediately to keep RAM usage low
+            img_bytes = None
+            if p_idx % 3 == 0:
+                import gc
+                gc.collect()
 
             # Polite pacing between pages when using Mistral to stay under per-second rate limits
             if method_desc.startswith("OCR processed via Mistral"):
