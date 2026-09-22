@@ -40,7 +40,10 @@ def get_poppler_path() -> Optional[str]:
     project_root = Path(__file__).resolve().parents[1]
     local_poppler_root = project_root / "tools" / "poppler"
     if local_poppler_root.exists():
-        candidates = list(local_poppler_root.glob("**/pdftoppm.exe"))
+        direct_bin = local_poppler_root / "poppler-26.02.0" / "Library" / "bin"
+        if (direct_bin / "pdftoppm.exe").exists():
+            return str(direct_bin)
+        candidates = list(local_poppler_root.rglob("pdftoppm.exe"))
         if candidates:
             return str(candidates[0].parent)
 
@@ -103,6 +106,7 @@ def split_ocr_text_by_page(ocr_text: str) -> List[Tuple[int, str]]:
 def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
     """
     Uploads an image to Mistral files API and runs OCR processing.
+    Includes retries on HTTP 429.
     Returns the extracted markdown text.
     """
     if not settings.MISTRAL_API_KEY:
@@ -110,55 +114,152 @@ def call_mistral_ocr(img_bytes: bytes, filename: str) -> str:
 
     headers = {"Authorization": f"Bearer {settings.MISTRAL_API_KEY}"}
 
-    # Step 1: Upload file to Mistral
     files = {
         "file": (filename, img_bytes, "image/jpeg"),
         "purpose": (None, "ocr")
     }
 
-    print(f"Uploading page {filename} to Mistral OCR API...")
+    file_id = None
     with httpx.Client(timeout=60.0) as client:
-        upload_resp = client.post(
-            "https://api.mistral.ai/v1/files",
-            headers=headers,
-            files=files
-        )
-        if upload_resp.status_code != 200:
-            raise Exception(f"Mistral File Upload failed ({upload_resp.status_code}): {upload_resp.text}")
-        
-        file_id = upload_resp.json().get("id")
+        for attempt in range(2):
+            upload_resp = client.post(
+                "https://api.mistral.ai/v1/files",
+                headers=headers,
+                files=files
+            )
+            if upload_resp.status_code == 429:
+                wait_s = 2 * (attempt + 1)
+                print(f"Mistral File Upload 429 rate limited. Waiting {wait_s}s (attempt {attempt + 1})...")
+                time.sleep(wait_s)
+                continue
+            if upload_resp.status_code != 200:
+                raise Exception(f"Mistral File Upload failed ({upload_resp.status_code}): {upload_resp.text}")
+            file_id = upload_resp.json().get("id")
+            break
+
         if not file_id:
-            raise Exception(f"No file ID returned by Mistral upload: {upload_resp.text}")
+            raise Exception("Mistral File Upload failed: 429 Rate Limit Exceeded.")
 
-        # Step 2: Call OCR processing
-        print(f"Triggering OCR processing for file_id {file_id}...")
-        ocr_payload = {
-            "model": "mistral-ocr-latest",
-            "document": {
-                "type": "file",
-                "file_id": file_id
-            }
-        }
-        ocr_resp = client.post(
-            "https://api.mistral.ai/v1/ocr",
-            headers=headers,
-            json=ocr_payload
-        )
-        if ocr_resp.status_code != 200:
-            raise Exception(f"Mistral OCR processing failed ({ocr_resp.status_code}): {ocr_resp.text}")
-        
-        # Clean up the file on Mistral to respect privacy / storage limits
         try:
-            client.delete(f"https://api.mistral.ai/v1/files/{file_id}", headers=headers)
-        except Exception as delete_err:
-            print(f"Failed to delete temporary Mistral file {file_id}: {delete_err}")
+            ocr_payload = {
+                "model": "mistral-ocr-latest",
+                "document": {
+                    "type": "file",
+                    "file_id": file_id
+                }
+            }
+            ocr_resp = None
+            for attempt in range(2):
+                ocr_resp = client.post(
+                    "https://api.mistral.ai/v1/ocr",
+                    headers=headers,
+                    json=ocr_payload
+                )
+                if ocr_resp.status_code == 429:
+                    wait_s = 3 * (attempt + 1)
+                    print(f"Mistral OCR 429 rate limited. Waiting {wait_s}s (attempt {attempt + 1})...")
+                    time.sleep(wait_s)
+                    continue
+                break
 
-        # Extract markdown contents from all pages returned (should be 1 page since we upload page by page)
-        ocr_data = ocr_resp.json()
-        pages = ocr_data.get("pages", [])
-        if not pages:
-            return ""
-        return "\n\n".join(page.get("markdown", "") for page in pages)
+            if not ocr_resp or ocr_resp.status_code != 200:
+                err_text = ocr_resp.text if ocr_resp else "No response"
+                raise Exception(f"Mistral OCR processing failed ({getattr(ocr_resp, 'status_code', 429)}): {err_text}")
+
+            ocr_data = ocr_resp.json()
+            pages = ocr_data.get("pages", [])
+            if not pages:
+                return ""
+            return "\n\n".join(page.get("markdown", "") for page in pages)
+
+        finally:
+            try:
+                client.delete(f"https://api.mistral.ai/v1/files/{file_id}", headers=headers)
+            except Exception:
+                pass
+
+
+def call_gemini_vision_ocr(img_bytes: bytes, page_num: int = 1) -> str:
+    """
+    Calls Google Gemini Multimodal Vision REST API with Key Rotation as OCR fallback.
+    Extracts all newspaper text from the page image in English, Punjabi (Gurmukhi), and Hindi.
+    """
+    import base64
+    b64_img = base64.b64encode(img_bytes).decode("utf-8")
+
+    ocr_prompt = (
+        "You are an expert Optical Character Recognition (OCR) engine for daily newspapers in Punjab, India.\n"
+        "Transcribe and extract all readable text, headlines, and articles from this newspaper page image.\n"
+        "Preserve the exact original text and language (English, Punjabi in Gurmukhi script, and Hindi).\n"
+        "Maintain column structure and paragraph separation. Do NOT summarize, explain, or skip any content.\n"
+        "Output ONLY the transcribed raw text."
+    )
+
+    keys = get_all_gemini_keys()
+    if not keys:
+        raise ValueError("No GEMINI_API_KEY configured for Vision OCR fallback.")
+
+    GEMINI_VISION_MODELS = [
+        "gemini-2.0-flash",
+        "gemini-2.5-flash",
+        "gemini-flash-latest",
+        "gemini-1.5-flash"
+    ]
+
+    last_error = None
+    for attempt in range(len(keys) * 2):
+        key = get_next_gemini_key()
+        if not key:
+            continue
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": "image/jpeg",
+                                "data": b64_img
+                            }
+                        },
+                        {
+                            "text": ocr_prompt
+                        }
+                    ]
+                }
+            ]
+        }
+
+        for model_name in GEMINI_VISION_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+            try:
+                with httpx.Client(timeout=90.0) as client:
+                    resp = client.post(url, json=payload)
+                    if resp.status_code == 429:
+                        print(f"Gemini Vision Key rate limited (429) on {model_name}. Rotating key...")
+                        last_error = "Rate Limit (429)"
+                        break  # Rotate key
+                    if resp.status_code == 404:
+                        continue
+                    if resp.status_code != 200:
+                        last_error = f"HTTP {resp.status_code}: {resp.text[:120]}"
+                        continue
+
+                    result = resp.json()
+                    candidates = result.get("candidates", [])
+                    if candidates:
+                        content = candidates[0].get("content", {})
+                        parts = content.get("parts", [])
+                        if parts:
+                            extracted = parts[0].get("text", "").strip()
+                            if extracted:
+                                return extracted
+            except Exception as e:
+                print(f"Gemini Vision error on page {page_num} with {model_name}: {e}")
+                last_error = str(e)
+                time.sleep(0.3)
+
+    raise Exception(f"Gemini Vision OCR failed for page {page_num}: {last_error}")
 
 
 def call_gemini_with_rotation(prompt: str) -> str:
@@ -495,15 +596,14 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
             page_num = p_idx + 1
             print(f"Processing page {page_num}/{total_pages}...")
             
+            img_bytes = None
             page_text = ""
-            converted_via_image = False
-            
-            # Try to convert page to JPEG image using PyMuPDF (no external dependencies) or pdf2image (requires Poppler)
+            method_desc = "No text extracted"
+
+            # 1. Render page to image bytes using PyMuPDF (fast, pure python/c) or pdf2image (Poppler)
             if PYMUPDF_AVAILABLE and fitz_doc:
                 try:
                     page = fitz_doc.load_page(p_idx)
-                    
-                    # Target scaling to ~1200px width at 150 DPI
                     rect = page.rect
                     width = rect.width
                     if width > 0:
@@ -516,26 +616,11 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                         pix = page.get_pixmap(dpi=150)
                     
                     img_bytes = pix.tobytes("jpeg")
-                    
-                    # Call Mistral OCR API
-                    if settings.MISTRAL_API_KEY:
-                        page_text = call_mistral_ocr(img_bytes, f"page_{page_num}.jpg")
-                        converted_via_image = True
-                    else:
-                        page_text = ""  # Trigger fallback
-                except Exception as img_err:
-                    error_text = f"Page {page_num} (PyMuPDF): {img_err}"
-                    ocr_errors.append(error_text)
-                    print(f"PyMuPDF/Mistral OCR failed for page {page_num}: {img_err}")
-                    update_pdf_upload(upload_id, {
-                        "progress_log": f"OCR image/Mistral step failed on page {page_num} (PyMuPDF): {str(img_err)[:220]}"
-                    })
-                    page_text = ""
+                except Exception as render_err:
+                    print(f"PyMuPDF render failed on page {page_num}: {render_err}")
 
-            # Try to convert page to JPEG image using pdf2image if PyMuPDF not available or failed
-            if not page_text and PDF2IMAGE_AVAILABLE:
+            if not img_bytes and PDF2IMAGE_AVAILABLE:
                 try:
-                    # Convert only the current page to conserve memory
                     images = pdf2image.convert_from_bytes(
                         file_bytes,
                         first_page=page_num,
@@ -545,56 +630,72 @@ def process_pdf_background(upload_id: str, file_bytes: bytes) -> None:
                     )
                     if images:
                         img = images[0]
-                        # Resize to maximum width 1200px maintaining aspect ratio
                         if img.width > 1200:
                             ratio = 1200.0 / img.width
                             new_size = (1200, int(img.height * ratio))
-                            # Handle different PIL versions resizing
                             img = img.resize(new_size, Image.Resampling.LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS)
                         
                         img_byte_arr = io.BytesIO()
                         img.save(img_byte_arr, format='JPEG', quality=70)
                         img_bytes = img_byte_arr.getvalue()
-                        
-                        # Call Mistral OCR API
-                        if settings.MISTRAL_API_KEY:
-                            page_text = call_mistral_ocr(img_bytes, f"page_{page_num}.jpg")
-                            converted_via_image = True
-                        else:
-                            page_text = "" # Trigger pypdf text extraction fallback
-                except Exception as img_err:
-                    error_text = f"Page {page_num} (pdf2image): {img_err}"
-                    ocr_errors.append(error_text)
-                    print(f"pdf2image/Mistral OCR failed for page {page_num}: {img_err}")
-                    update_pdf_upload(upload_id, {
-                        "progress_log": f"OCR image/Mistral step failed on page {page_num} (pdf2image): {str(img_err)[:220]}"
-                    })
-                    page_text = ""
-            
-            # Fallback to PyPDF text extraction
+                except Exception as render_err:
+                    print(f"pdf2image render failed on page {page_num}: {render_err}")
+
+            # 2. Extract OCR from rendered page image
+            if img_bytes:
+                # Primary OCR: Mistral OCR (with automatic 429 backoff)
+                if settings.MISTRAL_API_KEY:
+                    try:
+                        page_text = call_mistral_ocr(img_bytes, f"page_{page_num}.jpg")
+                        if page_text and len(page_text.strip()) >= 30:
+                            method_desc = "OCR processed via Mistral"
+                    except Exception as mistral_err:
+                        print(f"Mistral OCR failed on page {page_num} ({mistral_err}). Trying Gemini Vision fallback...")
+                        update_pdf_upload(upload_id, {
+                            "progress_log": f"Page {page_num}: Mistral OCR unavailable ({str(mistral_err)[:50]}). Triggering Gemini Vision fallback..."
+                        })
+                        page_text = ""
+
+                # Secondary Fallback OCR: Google Gemini Multimodal Vision with key rotation
+                if not page_text and get_all_gemini_keys():
+                    try:
+                        page_text = call_gemini_vision_ocr(img_bytes, page_num)
+                        if page_text and len(page_text.strip()) >= 30:
+                            method_desc = "OCR processed via Gemini Vision (fallback)"
+                    except Exception as gemini_err:
+                        print(f"Gemini Vision OCR failed for page {page_num}: {gemini_err}")
+                        update_pdf_upload(upload_id, {
+                            "progress_log": f"Page {page_num}: Gemini Vision OCR error: {str(gemini_err)[:60]}"
+                        })
+                        page_text = ""
+
+            # 3. Tertiary fallback: PyPDF digital text extraction (if document wasn't a scan)
             if not page_text:
-                print(f"Using fallback text extraction for page {page_num}...")
                 try:
                     page_text = pdf_reader.pages[p_idx].extract_text() or ""
+                    if page_text and len(page_text.strip()) >= 30:
+                        method_desc = "Text extracted via PDF digital text"
                 except Exception as pypdf_err:
-                    print(f"PyPDF extraction failed: {pypdf_err}")
                     page_text = ""
 
-            # Check if we still have absolutely no text
+            # Fallback placeholder if no text could be extracted by any engine
             if not page_text.strip():
                 page_text = f"[No readable text extracted from Page {page_num}]"
+                method_desc = "No readable text extracted"
 
             extracted_texts.append((page_num, page_text))
             
             # Update status log in DB
-            method_desc = "OCR processed via Mistral" if converted_via_image else "Text extracted via fallback parser"
-            if converted_via_image and not is_unreadable_page_text(page_text):
+            if not is_unreadable_page_text(page_text):
                 ocr_pages += 1
-            elif not is_unreadable_page_text(page_text):
-                fallback_pages += 1
+
             update_pdf_upload(upload_id, {
                 "progress_log": f"Page {page_num} of {total_pages} completed - {method_desc}."
             })
+
+            # Polite pacing between pages when using Mistral to stay under per-second rate limits
+            if method_desc.startswith("OCR processed via Mistral"):
+                time.sleep(1.0)
 
         if fitz_doc:
             try:
