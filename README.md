@@ -124,15 +124,18 @@ Suchit- Nagar Nigam/
 ### 1. Supabase (Database)
 - Production Postgres database runs on Supabase. Apply migrations and seed data directly on your project instance.
 
-### 2. Backend Hosting (Render)
-- Deploy your FastAPI repository to **Render** as a **Web Service**.
-- **Build Command**: `pip install -r backend/requirements.txt`
-- **Start Command**: `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
-- **Environment Variables**: Add all parameters from `.env.example` into Render's dashboard environment block.
+### 2. Backend Hosting (Railway)
+- Deploy the repository root to **Railway**.
+- The committed [`railway.json`](railway.json) forces Railway to build the root [`Dockerfile`](Dockerfile), start the API with `python -m backend.entrypoint`, and health-check `/health`.
+- Do not override the Railway start command with `uvicorn ... --port $PORT`; Docker/image start-command overrides do not reliably expand `$PORT`. Leave the start command unset in Railway, or set it exactly to:
+  ```bash
+  python -m backend.entrypoint
+  ```
+- **Environment Variables**: Add the backend parameters from `.env.example` into Railway's Variables tab.
 
 ### 3. Frontend Hosting (Vercel)
 - Deploy the Next.js app to **Vercel**.
 - Set **Framework Preset** to `Next.js`.
 - Set **Root Directory** to `frontend`.
 - Set **Environment Variables**:
-  - `NEXT_PUBLIC_API_URL` → Address of your Render backend URL (e.g. `https://suchit-nigam-backend.onrender.com`).
+  - `NEXT_PUBLIC_API_URL` -> Address of your Railway backend URL (e.g. `https://suchitmcl-production.up.railway.app`).
