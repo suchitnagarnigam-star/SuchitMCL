@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     MISTRAL_API_KEY_1: str = ""
     MISTRAL_API_KEY_2: str = ""
     MISTRAL_API_KEY_3: str = ""
+    MISTRAL_API_KEY_4: str = ""
     GEMINI_API_KEY_1: str = ""
     GEMINI_API_KEY_2: str = ""
     GEMINI_API_KEY_3: str = ""
@@ -34,10 +35,12 @@ def get_all_mistral_keys() -> List[str]:
         settings.MISTRAL_API_KEY,
         settings.MISTRAL_API_KEY_2,
         settings.MISTRAL_API_KEY_3,
+        settings.MISTRAL_API_KEY_4,
         os.getenv("MISTRAL_API_KEY_1", ""),
         os.getenv("MISTRAL_API_KEY", ""),
         os.getenv("MISTRAL_API_KEY_2", ""),
         os.getenv("MISTRAL_API_KEY_3", ""),
+        os.getenv("MISTRAL_API_KEY_4", ""),
     ]
     resolved = []
     for k in candidate_keys:
