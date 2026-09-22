@@ -283,7 +283,8 @@ def get_news_items(
     department: Optional[str] = Query(None),
     severity: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
-    source_type: Optional[str] = Query(None)
+    source_type: Optional[str] = Query(None),
+    include_backlog: bool = Query(False)
 ):
     # If date_str is "all" or empty string, do not filter by date
     if date_str and date_str.lower() in ["all", "none", ""]:
@@ -299,7 +300,8 @@ def get_news_items(
             department=department,
             severity=severity,
             status=status,
-            source_type=source_type
+            source_type=source_type,
+            include_backlog=include_backlog
         )
         return items
     except Exception as e:

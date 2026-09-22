@@ -463,7 +463,7 @@ def create_news_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         created.append(record)
     return created
 
-def get_news_items(date_str: Optional[str] = None, department: Optional[str] = None, severity: Optional[str] = None, status: Optional[str] = None, source_type: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_news_items(date_str: Optional[str] = None, department: Optional[str] = None, severity: Optional[str] = None, status: Optional[str] = None, source_type: Optional[str] = None, include_backlog: bool = False) -> List[Dict[str, Any]]:
     news_items_list = []
     if supabase:
         try:
@@ -475,10 +475,11 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
             if severity:
                 q = q.eq("severity", severity)
             if date_str:
-                if status == "pending":
-                    # For pending items, include items on or before date_str
+                if status == "pending" and include_backlog:
+                    # If backlog is explicitly requested, include items on or before date_str
                     q = q.lte("created_at", f"{date_str}T23:59:59")
                 else:
+                    # Strictly match specific date
                     q = q.gte("created_at", f"{date_str}T00:00:00").lte("created_at", f"{date_str}T23:59:59")
             
             res = q.execute()
@@ -495,10 +496,11 @@ def get_news_items(date_str: Optional[str] = None, department: Optional[str] = N
         if severity:
             news_items_list = [x for x in news_items_list if x.get("severity") == severity]
         if date_str:
-            if status == "pending":
-                # For pending items, include items on or before date_str
+            if status == "pending" and include_backlog:
+                # If backlog is explicitly requested, include items on or before date_str
                 news_items_list = [x for x in news_items_list if x.get("created_at", "")[:10] <= date_str]
             else:
+                # Strictly match specific date
                 news_items_list = [x for x in news_items_list if x.get("created_at", "").startswith(date_str)]
 
     all_mappings = get_domain_mappings()

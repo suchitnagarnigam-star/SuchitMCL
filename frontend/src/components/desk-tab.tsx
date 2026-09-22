@@ -556,12 +556,27 @@ export default function DeskTab({ officers }: DeskTabProps) {
     return summary.toLowerCase();
   };
 
-  // Pending counts by source
-  const totalPending = newsItems.length;
-  const mediaPending = newsItems.filter(x => !isDaakItem(x)).length;
-  const daakPending = newsItems.filter(x => isDaakItem(x)).length;
+  // Pending counts by source (strictly for items on selected date)
+  const dateSpecificItems = selectedDate && selectedDate !== "all"
+    ? newsItems.filter(item => {
+        const itemDate = (item.created_at || "").slice(0, 10);
+        return !itemDate || itemDate === selectedDate;
+      })
+    : newsItems;
+
+  const totalPending = dateSpecificItems.length;
+  const mediaPending = dateSpecificItems.filter(x => !isDaakItem(x)).length;
+  const daakPending = dateSpecificItems.filter(x => isDaakItem(x)).length;
 
   const filteredItems = newsItems.filter(item => {
+    // Client-side strict date safety guard
+    if (selectedDate && selectedDate !== "all") {
+      const itemDate = (item.created_at || "").slice(0, 10);
+      if (itemDate && itemDate !== selectedDate) {
+        return false;
+      }
+    }
+
     const isDaak = isDaakItem(item);
     const daakInfo = getDaakDetails(item);
 
@@ -921,6 +936,16 @@ export default function DeskTab({ officers }: DeskTabProps) {
               onChange={(e) => setSelectedDate(e.target.value)}
               className="bg-transparent text-slate-800 outline-none cursor-pointer font-bold"
             />
+            {selectedDate !== new Date().toISOString().split("T")[0] && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate(new Date().toISOString().split("T")[0])}
+                className="text-[10px] font-black text-blue-600 hover:text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded transition-colors"
+                title="Jump to today"
+              >
+                Today
+              </button>
+            )}
           </div>
 
           {/* View Mode Toggle */}
