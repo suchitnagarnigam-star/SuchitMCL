@@ -20,9 +20,8 @@ COPY backend/ ./backend/
 # Set environment variables for UTF-8 and low memory consumption
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONUTF8=1
-ENV PORT=8000
 
 EXPOSE 8000
 
 # Run single worker Uvicorn honoring Railway's dynamic PORT
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1

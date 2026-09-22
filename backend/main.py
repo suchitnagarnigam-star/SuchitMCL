@@ -15,14 +15,28 @@ app = FastAPI(
     description="Media Intelligence and Dispatch System Backend for Municipal Corporation Ludhiana (MCL)"
 )
 
-# CORS setup
+# CORS setup - support credentials with wildcard matching via regex
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+@app.get("/health")
+def health_check():
+    """
+    Health check endpoint for Railway and external uptime monitors.
+    Returns 200 OK immediately so deployment health checks succeed.
+    """
+    return {
+        "status": "healthy",
+        "service": "Suchit Nagar Nigam API (ਸੂਚਿਤ ਨਗਰ ਨਿਗਮ)",
+        "timestamp": datetime.now().isoformat()
+    }
 
 
 # --- REQUEST/RESPONSE SCHEMAS ---
