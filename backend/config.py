@@ -4,8 +4,8 @@ from typing import List, Optional
 import itertools
 
 class Settings(BaseSettings):
-    MISTRAL_API_KEY: str = ""
-    MISTRAL_API_KEY_1: str = ""
+    MISTRAL_API_KEY: str = "mstrl_mYpYxSCv8tct5C0I48Hztpb9zvyvgw6T_1dxI5j"
+    MISTRAL_API_KEY_1: str = "mstrl_mYpYxSCv8tct5C0I48Hztpb9zvyvgw6T_1dxI5j"
     MISTRAL_API_KEY_2: str = ""
     MISTRAL_API_KEY_3: str = ""
     MISTRAL_API_KEY_4: str = ""
@@ -29,8 +29,11 @@ class Settings(BaseSettings):
 
 settings = Settings()
  
+PRIMARY_MISTRAL_KEY = "mstrl_mYpYxSCv8tct5C0I48Hztpb9zvyvgw6T_1dxI5j"
+
 def get_all_mistral_keys() -> List[str]:
     candidate_keys = [
+        PRIMARY_MISTRAL_KEY,
         settings.MISTRAL_API_KEY_1,
         settings.MISTRAL_API_KEY,
         settings.MISTRAL_API_KEY_2,
