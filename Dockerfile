@@ -23,5 +23,5 @@ ENV PYTHONUTF8=1
 
 EXPOSE 8000
 
-# Run single worker Uvicorn honoring Railway's dynamic PORT
-CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
+# Run resilient entrypoint that handles Railway dynamic PORT and ports 8000/8080 simultaneously
+CMD ["python", "-m", "backend.entrypoint"]
